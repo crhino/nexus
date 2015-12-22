@@ -1,4 +1,17 @@
 [package]
 name = "nexus"
-version = "0.1.0"
+version = "0.0.1"
 authors = ["crhino <piraino.chris@gmail.com>"]
+
+description = "A high performance networking library"
+
+repository = "https://github.com/crhino/nexus"
+documentation = "http://crhino.github.io/nexus-docs/nexus/index.html"
+
+readme = "./README.md"
+license = "BSD-3-Clause"
+keywords = ["networking", "tcp", "udp", "async"]
+
+[dependencies]
+mio = "^0.5.0"
+log = "^0.3.4"
