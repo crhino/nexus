@@ -1,4 +1,4 @@
-// #![deny(missing_docs, dead_code)]
+#![deny(missing_docs, dead_code)]
 
 //! # Nexus
 //!

@@ -17,15 +17,20 @@ const SLAB_GROW_SIZE: usize = 1024;
 /// A Reactor runs the event loop and manages sockets
 pub struct Reactor<P: Protocol>(EventLoop<ReactorHandler<P>>, ReactorHandler<P>);
 
+/// Configuration for the Reactor
 pub struct ReactorConfig {
     timer_capacity: usize,
     timer_tick_interval_ms: Option<u64>,
 }
 
 #[derive(Debug)]
+/// Error returned by the Reactor.
 pub enum ReactorError<S> {
+    /// An I/O error was returned from the OS.
     IoError(io::Error, S),
+    /// Could not find associated socket for the token.
     NoSocketFound(Token),
+    /// An error occurred while adding a timeout.
     TimerError,
 }
 
@@ -45,29 +50,22 @@ impl<S> fmt::Display for ReactorError<S> {
     }
 }
 
-// impl<S: fmt::Debug> Error for ReactorError<S> {
-//     fn description(&self) -> &str {
-//         match *self {
-//             ReactorError::MaxConnectionsReached(ref s) => {
-//                 "max connections reached"
-//             },
-//             ReactorError::IoError((ref e, ref s)) => {
-//                 format!("io error: {}", e.description())
-//             },
-//         }
-//     }
-// }
-
 impl ReactorConfig {
+    /// Create a new default ReactorConfig.
     pub fn new() -> ReactorConfig {
         ReactorConfig::default()
     }
 
+    /// Set the timer capacity.
+    ///
+    /// This is used by the event loop to specify the number of timers allowed. An indication that
+    /// this should be increased if if a `ReactorError::TimerError` is returned.
     pub fn timer_capacity(mut self, cap: usize) -> ReactorConfig {
         self.timer_capacity = cap;
         self
     }
 
+    /// Set the tick interval for the timer.
     pub fn timer_tick_interval_ms(mut self, ms: u64) -> ReactorConfig {
         self.timer_tick_interval_ms = Some(ms);
         self
@@ -94,10 +92,12 @@ impl Default for ReactorConfig {
 }
 
 impl<P: Protocol> Reactor<P> {
+    /// Create a new Reactor with the default options.
     pub fn new(proto: P) -> io::Result<Reactor<P>> {
         Reactor::with_configuration(proto, ReactorConfig::default())
     }
 
+    /// Create a new Reactor with the specified configuration.
     pub fn with_configuration(proto: P, config: ReactorConfig) -> io::Result<Reactor<P>> {
         let event_loop = try!(EventLoop::configured(config.to_event_loop_config()));
         let handler = ReactorHandler::new(proto);
@@ -105,12 +105,21 @@ impl<P: Protocol> Reactor<P> {
         Ok(Reactor(event_loop, handler))
     }
 
+    /// Start the Reactor.
     pub fn start(&mut self) {
+        panic!("unimplemented");
+        // TODO: Implement this
     }
 
+    /// Shutdown and consume the Reactor.
     pub fn shutdown(self) {
+        panic!("unimplemented");
+        // TODO: Implement this
     }
 
+    /// Tick the Reactor for a single iteration.
+    ///
+    /// This is mostly used for test purposes.
     pub fn tick(&mut self) -> io::Result<()> {
         let &mut Reactor(ref mut event_loop, ref mut handler) = self;
         event_loop.run_once(handler, Some(1000))

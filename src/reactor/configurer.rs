@@ -44,15 +44,21 @@ impl<P: Protocol> ProtocolConfigurer<P> {
     }
 }
 
+/// Trait to allow a Protocol implementation to configure the Reactor's sockets.
 pub trait Configurer<P: Protocol> {
+    /// Add socket to the Reactor.
     fn add_socket(&mut self, socket: P::Socket, events: EventSet);
 
+    /// Add socket to the Reactor with a timeout.
     fn add_socket_timeout(&mut self, socket: P::Socket, events: EventSet, timeout_ms: u64);
 
+    /// Remove the socket associated to the token from the Reactor.
     fn remove_socket(&mut self, token: Token);
 
+    /// Update the socket associated to the token from the Reactor.
     fn update_socket(&mut self, token: Token, events: EventSet);
 
+    /// Update the socket associated to the token from the Reactor with a timeout.
     fn update_socket_timeout(&mut self, token: Token, events: EventSet, timeout_ms: u64);
 }
 
@@ -79,6 +85,7 @@ impl<P: Protocol> Configurer<P> for ProtocolConfigurer<P> {
 }
 
 impl<P: Protocol> Reactor<P> {
+    /// Add socket to the Reactor.
     pub fn add_socket(&mut self, socket: P::Socket, events: EventSet)
         -> Result<Token, ReactorError<P::Socket>> {
             let handler = &mut self.1;
@@ -86,6 +93,7 @@ impl<P: Protocol> Reactor<P> {
             handler.add_socket(event_loop, socket, events, None)
         }
 
+    /// Add socket to the Reactor with a timeout.
     pub fn add_socket_timeout(&mut self,
                               socket: P::Socket,
                               events: EventSet,
@@ -96,6 +104,7 @@ impl<P: Protocol> Reactor<P> {
             handler.add_socket(event_loop, socket, events, Some(timeout_ms))
         }
 
+    /// Remove the socket associated to the token from the Reactor.
     pub fn remove_socket(&mut self, token: Token)
         -> Result<P::Socket, ReactorError<P::Socket>> {
             let handler = &mut self.1;
@@ -103,6 +112,7 @@ impl<P: Protocol> Reactor<P> {
             handler.remove_socket(event_loop, token)
         }
 
+    /// Update the socket associated to the token from the Reactor.
     pub fn update_socket(&mut self, token: Token, events: EventSet)
         -> Result<(), ReactorError<P::Socket>> {
             let handler = &mut self.1;
@@ -110,6 +120,7 @@ impl<P: Protocol> Reactor<P> {
             handler.update_socket(event_loop, token, events, None)
         }
 
+    /// Update the socket associated to the token from the Reactor with a timeout.
     pub fn update_socket_timeout(&mut self, token: Token, events: EventSet, timeout_ms: u64)
         -> Result<(), ReactorError<P::Socket>> {
             let handler = &mut self.1;
@@ -117,4 +128,3 @@ impl<P: Protocol> Reactor<P> {
             handler.update_socket(event_loop, token, events, Some(timeout_ms))
         }
 }
-
