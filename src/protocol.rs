@@ -1,5 +1,5 @@
 use mio::{Evented};
-use reactor::{Reactor, ReactorError, Configurer, Token};
+use reactor::{ReactorError, Configurer, Token};
 
 /// A trait representing a network Protocol
 pub trait Protocol {

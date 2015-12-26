@@ -5,10 +5,7 @@ pub use reactor::configurer::{Configurer};
 pub use mio::Token;
 pub use reactor::handler::ReactorHandler;
 
-use reactor::configurer::{ProtocolConfigurer};
-
-use mio::{Evented, EventLoop, EventLoopConfig, PollOpt, EventSet, Handler, Timeout};
-use mio::util::{Slab};
+use mio::{EventLoop, EventLoopConfig};
 use std::io::{self};
 use std::error::Error;
 use std::fmt;
@@ -35,7 +32,7 @@ pub enum ReactorError<S> {
 impl<S> fmt::Display for ReactorError<S> {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            ReactorError::IoError(ref e, ref s) => {
+            ReactorError::IoError(ref e, _) => {
                 write!(fmt, "io error: {}", e)
             },
             ReactorError::NoSocketFound(token) => {
@@ -123,7 +120,7 @@ impl<P: Protocol> Reactor<P> {
 #[cfg(test)]
 mod tests {
     use test_helpers::{FakeProtocol, FakeSocket};
-    use mio::{Evented, EventSet};
+    use mio::{EventSet};
     use mio::unix::{pipe};
     use std::os::unix::io::{AsRawFd};
     use std::io::Write;
@@ -151,6 +148,7 @@ mod tests {
 
         assert_eq!(proto.readable_fd(), Some(read_fd));
         assert_eq!(proto.writable_fd(), Some(write_fd));
+        assert_eq!(proto.error_fd(), None);
     }
 
     #[test]
@@ -181,7 +179,7 @@ mod tests {
 
     #[test]
     fn test_reactor_timeout() {
-        let (r, w) = pipe().unwrap();
+        let (r, _w) = pipe().unwrap();
 
         let mut r = FakeSocket::PReader(r);
 
@@ -271,7 +269,7 @@ mod tests {
         let mut r = FakeSocket::PReader(r);
         let read_fd = r.as_raw_fd();
 
-        let (r2, mut w2) = pipe().unwrap();
+        let (_r2, mut w2) = pipe().unwrap();
         let write_fd = w2.as_raw_fd();
         assert!(w2.write(&buf).is_ok());
         assert!(w2.flush().is_ok());

@@ -1,9 +1,7 @@
-use mio::{EventSet, EventLoop, PollOpt};
-use mio::util::{Slab};
-use std::io;
+use mio::{EventSet, EventLoop};
 
 use protocol::Protocol;
-use reactor::{Reactor, ReactorError, ReactorHandler, Token, SLAB_GROW_SIZE};
+use reactor::{Reactor, ReactorError, ReactorHandler, Token};
 
 pub struct ProtocolConfigurer<P: Protocol> {
     pub additions: Vec<(P::Socket, EventSet, Option<u64>)>,

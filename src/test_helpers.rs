@@ -1,11 +1,10 @@
 use std::sync::{Arc, Mutex};
-use std::marker::{PhantomData};
 use std::os::unix::io::{RawFd, AsRawFd};
 use mio::{Selector, PollOpt, Token, EventSet, Evented};
 use mio::unix::{PipeReader, PipeWriter};
 use std::io::{self, Read};
 
-use reactor::{Reactor, ReactorError, Configurer};
+use reactor::{ReactorError, Configurer};
 use protocol::{Protocol};
 
 #[derive(Clone)]
@@ -19,7 +18,6 @@ struct Inner<'a> {
     on_timeout_fd: Mutex<Option<RawFd>>,
     on_disconnect_fd: Mutex<Option<RawFd>>,
     on_error_fd: Mutex<Option<RawFd>>,
-    // phantom: PhantomData<&'a FakeSocket>,
     additions: Mutex<Vec<(&'a mut FakeSocket, EventSet)>>,
     updates: Mutex<Vec<(Token, EventSet)>>,
     removes: Mutex<Vec<Token>>,
@@ -76,7 +74,7 @@ impl AsRawFd for FakeSocket {
 impl<'a> Protocol for FakeProtocol<'a> {
     type Socket = &'a mut FakeSocket;
 
-    fn on_readable(&mut self, configurer: &mut Configurer<Self>, socket: &mut Self::Socket, token: Token) {
+    fn on_readable(&mut self, configurer: &mut Configurer<Self>, socket: &mut Self::Socket, _token: Token) {
         let mut buf = [0u8, 32];
         let res = match *socket {
             &mut PReader(ref mut r) => r.read(&mut buf),
@@ -94,7 +92,7 @@ impl<'a> Protocol for FakeProtocol<'a> {
         self.configure_sockets(configurer);
     }
 
-    fn on_writable(&mut self, configurer: &mut Configurer<Self>, socket: &mut Self::Socket, token: Token) {
+    fn on_writable(&mut self, configurer: &mut Configurer<Self>, socket: &mut Self::Socket, _token: Token) {
         {
             let mut guard = self.inner.on_writable_fd.lock().unwrap();
             *guard = Some(socket.as_raw_fd());
@@ -102,7 +100,7 @@ impl<'a> Protocol for FakeProtocol<'a> {
         self.configure_sockets(configurer);
     }
 
-    fn on_timeout(&mut self, configurer: &mut Configurer<Self>, socket: &mut Self::Socket, token: Token) {
+    fn on_timeout(&mut self, configurer: &mut Configurer<Self>, socket: &mut Self::Socket, _token: Token) {
         {
             let mut guard = self.inner.on_timeout_fd.lock().unwrap();
             *guard = Some(socket.as_raw_fd());
@@ -110,7 +108,7 @@ impl<'a> Protocol for FakeProtocol<'a> {
         self.configure_sockets(configurer);
     }
 
-    fn on_disconnect(&mut self, configurer: &mut Configurer<Self>, socket: &mut Self::Socket, token: Token) {
+    fn on_disconnect(&mut self, configurer: &mut Configurer<Self>, socket: &mut Self::Socket, _token: Token) {
         {
             let mut guard = self.inner.on_disconnect_fd.lock().unwrap();
             *guard = Some(socket.as_raw_fd());
@@ -118,7 +116,7 @@ impl<'a> Protocol for FakeProtocol<'a> {
         self.configure_sockets(configurer);
     }
 
-    fn on_socket_error(&mut self, configurer: &mut Configurer<Self>, socket: &mut Self::Socket, token: Token) {
+    fn on_socket_error(&mut self, configurer: &mut Configurer<Self>, socket: &mut Self::Socket, _token: Token) {
         {
             let mut guard = self.inner.on_error_fd.lock().unwrap();
             *guard = Some(socket.as_raw_fd());
@@ -220,7 +218,7 @@ impl<'a> FakeProtocol<'a> {
     }
 
     pub fn error_fd(&mut self) -> Option<RawFd> {
-        let guard = self.inner.on_readable_fd.lock().unwrap();
+        let guard = self.inner.on_error_fd.lock().unwrap();
         (*guard).clone()
     }
 }

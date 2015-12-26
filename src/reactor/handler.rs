@@ -219,7 +219,7 @@ impl<P: Protocol> Handler for ReactorHandler<P> {
         configurer.update_event_loop(event_loop, self);
     }
 
-    fn timeout(&mut self, event_loop: &mut EventLoop<Self>, timeout: Self::Timeout) {
+    fn timeout(&mut self, _event_loop: &mut EventLoop<Self>, timeout: Self::Timeout) {
         let mut configurer = ProtocolConfigurer::new();
         let socket = &mut self.slab[timeout];
         self.timeouts.remove(&timeout);
