@@ -1,16 +1,16 @@
-use mio::{EventSet, EventLoop};
+use mio::{EventSet, EventLoop, Evented};
 
 use protocol::Protocol;
 use reactor::{Reactor, ReactorError, ReactorHandler, Token};
 
-pub struct ProtocolConfigurer<P: Protocol> {
-    pub additions: Vec<(P::Socket, EventSet, Option<u64>)>,
+pub struct ProtocolConfigurer<S> {
+    pub additions: Vec<(S, EventSet, Option<u64>)>,
     pub removals: Vec<Token>,
     pub updates: Vec<(Token, EventSet, Option<u64>)>,
 }
 
-impl<P: Protocol> ProtocolConfigurer<P> {
-    pub fn new() -> ProtocolConfigurer<P> {
+impl<S: Evented> ProtocolConfigurer<S> {
+    pub fn new() -> ProtocolConfigurer<S> {
         ProtocolConfigurer{
             additions: Vec::new(),
             removals: Vec::new(),
@@ -18,7 +18,7 @@ impl<P: Protocol> ProtocolConfigurer<P> {
         }
     }
 
-    pub fn update_event_loop(self,
+    pub fn update_event_loop<P: Protocol<Socket=S>>(self,
                              event_loop: &mut EventLoop<ReactorHandler<P>>,
                              handler: &mut ReactorHandler<P>) {
         for (s, evt, timeout) in self.additions.into_iter() {
@@ -45,12 +45,12 @@ impl<P: Protocol> ProtocolConfigurer<P> {
 }
 
 /// Trait to allow a Protocol implementation to configure the Reactor's sockets.
-pub trait Configurer<P: Protocol> {
+pub trait Configurer<S> {
     /// Add socket to the Reactor.
-    fn add_socket(&mut self, socket: P::Socket, events: EventSet);
+    fn add_socket(&mut self, socket: S, events: EventSet);
 
     /// Add socket to the Reactor with a timeout.
-    fn add_socket_timeout(&mut self, socket: P::Socket, events: EventSet, timeout_ms: u64);
+    fn add_socket_timeout(&mut self, socket: S, events: EventSet, timeout_ms: u64);
 
     /// Remove the socket associated to the token from the Reactor.
     fn remove_socket(&mut self, token: Token);
@@ -62,12 +62,12 @@ pub trait Configurer<P: Protocol> {
     fn update_socket_timeout(&mut self, token: Token, events: EventSet, timeout_ms: u64);
 }
 
-impl<P: Protocol> Configurer<P> for ProtocolConfigurer<P> {
-    fn add_socket(&mut self, socket: P::Socket, events: EventSet) {
+impl<S> Configurer<S> for ProtocolConfigurer<S> {
+    fn add_socket(&mut self, socket: S, events: EventSet) {
         self.additions.push((socket, events, None));
     }
 
-    fn add_socket_timeout(&mut self, socket: P::Socket, events: EventSet, timeout_ms: u64) {
+    fn add_socket_timeout(&mut self, socket: S, events: EventSet, timeout_ms: u64) {
         self.additions.push((socket, events, Some(timeout_ms)));
     }
 

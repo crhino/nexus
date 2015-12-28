@@ -33,7 +33,7 @@ impl<P: Protocol> ReactorHandler<P> {
         &mut self.slab
     }
 
-    fn call_protocol<C: Configurer<P>>(&mut self,
+    fn call_protocol<C: Configurer<P::Socket>>(&mut self,
                                     configurer: &mut C,
                                     token: Token,
                                     events: EventSet) {

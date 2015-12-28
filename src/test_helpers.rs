@@ -74,7 +74,7 @@ impl AsRawFd for FakeSocket {
 impl<'a> Protocol for FakeProtocol<'a> {
     type Socket = &'a mut FakeSocket;
 
-    fn on_readable(&mut self, configurer: &mut Configurer<Self>, socket: &mut Self::Socket, _token: Token) {
+    fn on_readable(&mut self, configurer: &mut Configurer<Self::Socket>, socket: &mut Self::Socket, _token: Token) {
         let mut buf = [0u8, 32];
         let res = match *socket {
             &mut PReader(ref mut r) => r.read(&mut buf),
@@ -92,7 +92,7 @@ impl<'a> Protocol for FakeProtocol<'a> {
         self.configure_sockets(configurer);
     }
 
-    fn on_writable(&mut self, configurer: &mut Configurer<Self>, socket: &mut Self::Socket, _token: Token) {
+    fn on_writable(&mut self, configurer: &mut Configurer<Self::Socket>, socket: &mut Self::Socket, _token: Token) {
         {
             let mut guard = self.inner.on_writable_fd.lock().unwrap();
             *guard = Some(socket.as_raw_fd());
@@ -100,7 +100,7 @@ impl<'a> Protocol for FakeProtocol<'a> {
         self.configure_sockets(configurer);
     }
 
-    fn on_timeout(&mut self, configurer: &mut Configurer<Self>, socket: &mut Self::Socket, _token: Token) {
+    fn on_timeout(&mut self, configurer: &mut Configurer<Self::Socket>, socket: &mut Self::Socket, _token: Token) {
         {
             let mut guard = self.inner.on_timeout_fd.lock().unwrap();
             *guard = Some(socket.as_raw_fd());
@@ -108,7 +108,7 @@ impl<'a> Protocol for FakeProtocol<'a> {
         self.configure_sockets(configurer);
     }
 
-    fn on_disconnect(&mut self, configurer: &mut Configurer<Self>, socket: &mut Self::Socket, _token: Token) {
+    fn on_disconnect(&mut self, configurer: &mut Configurer<Self::Socket>, socket: &mut Self::Socket, _token: Token) {
         {
             let mut guard = self.inner.on_disconnect_fd.lock().unwrap();
             *guard = Some(socket.as_raw_fd());
@@ -116,7 +116,7 @@ impl<'a> Protocol for FakeProtocol<'a> {
         self.configure_sockets(configurer);
     }
 
-    fn on_socket_error(&mut self, configurer: &mut Configurer<Self>, socket: &mut Self::Socket, _token: Token) {
+    fn on_socket_error(&mut self, configurer: &mut Configurer<Self::Socket>, socket: &mut Self::Socket, _token: Token) {
         {
             let mut guard = self.inner.on_error_fd.lock().unwrap();
             *guard = Some(socket.as_raw_fd());
@@ -180,7 +180,7 @@ impl<'a> FakeProtocol<'a> {
         guard.push(socket);
     }
 
-    fn configure_sockets(&mut self, event_configurer: &mut Configurer<Self>) {
+    fn configure_sockets(&mut self, event_configurer: &mut Configurer<<Self as Protocol>::Socket>) {
         let mut guard = self.inner.additions.lock().unwrap();
         while let Some((socket, events)) = guard.pop() {
             event_configurer.add_socket(socket, events);

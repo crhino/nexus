@@ -105,8 +105,8 @@ impl<P: Protocol> Reactor<P> {
         Ok(Reactor(event_loop, handler))
     }
 
-    /// Start the Reactor.
-    pub fn start(&mut self) {
+    /// Start and run the Reactor.
+    pub fn run(&mut self) -> io::Result<()> {
         panic!("unimplemented");
         // TODO: Implement this
     }
