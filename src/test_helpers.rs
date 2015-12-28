@@ -127,6 +127,10 @@ impl<'a> Protocol for FakeProtocol<'a> {
     fn on_event_loop_error(&mut self, error: ReactorError<Self::Socket>) {
         panic!("Received error: {:?}", error);
     }
+
+    fn tick(&mut self, configurer: &mut Configurer<Self::Socket>) {
+        self.configure_sockets(configurer);
+    }
 }
 
 impl<'a> FakeProtocol<'a> {

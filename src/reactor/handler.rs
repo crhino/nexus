@@ -207,6 +207,14 @@ impl<P: Protocol> ReactorHandler<P> {
                 }
             })
     }
+
+    fn timeout(&mut self,
+               configurer: &mut Configurer<P::Socket>,
+               timeout: Token) {
+        let socket = &mut self.slab[timeout];
+        self.timeouts.remove(&timeout);
+        self.protocol.on_timeout(configurer, socket, timeout);
+    }
 }
 
 impl<P: Protocol> Handler for ReactorHandler<P> {
@@ -219,10 +227,15 @@ impl<P: Protocol> Handler for ReactorHandler<P> {
         configurer.update_event_loop(event_loop, self);
     }
 
-    fn timeout(&mut self, _event_loop: &mut EventLoop<Self>, timeout: Self::Timeout) {
+    fn timeout(&mut self, event_loop: &mut EventLoop<Self>, timeout: Self::Timeout) {
         let mut configurer = ProtocolConfigurer::new();
-        let socket = &mut self.slab[timeout];
-        self.timeouts.remove(&timeout);
-        self.protocol.on_timeout(&mut configurer, socket, timeout);
+        self.timeout(&mut configurer, timeout);
+        configurer.update_event_loop(event_loop, self);
+    }
+
+    fn tick(&mut self, event_loop: &mut EventLoop<Self>) {
+        let mut configurer = ProtocolConfigurer::new();
+        self.protocol.tick(&mut configurer);
+        configurer.update_event_loop(event_loop, self);
     }
 }

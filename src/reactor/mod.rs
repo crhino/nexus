@@ -1,7 +1,5 @@
 pub mod configurer;
-mod handler;
-
-pub use reactor::configurer::{Configurer};
+mod handler; pub use reactor::configurer::{Configurer};
 pub use mio::Token;
 pub use reactor::handler::ReactorHandler;
 
@@ -117,10 +115,10 @@ impl<P: Protocol> Reactor<P> {
         // TODO: Implement this
     }
 
-    /// Tick the Reactor for a single iteration.
+    /// spin_once the Reactor for a single iteration.
     ///
     /// This is mostly used for test purposes.
-    pub fn tick(&mut self) -> io::Result<()> {
+    pub fn spin_once(&mut self) -> io::Result<()> {
         let &mut Reactor(ref mut event_loop, ref mut handler) = self;
         event_loop.run_once(handler, Some(1000))
     }
@@ -133,7 +131,7 @@ mod tests {
     use mio::unix::{pipe};
     use std::os::unix::io::{AsRawFd};
     use std::io::Write;
-    use reactor::{Reactor, Configurer};
+    use reactor::{Reactor, Configurer, ReactorConfig};
 
     #[test]
     fn test_reactor_read_write() {
@@ -153,7 +151,7 @@ mod tests {
         assert!(reactor.add_socket(&mut r, EventSet::readable()).is_ok());
         assert!(reactor.add_socket(&mut w, EventSet::writable()).is_ok());
 
-        assert!(reactor.tick().is_ok());
+        assert!(reactor.spin_once().is_ok());
 
         assert_eq!(proto.readable_fd(), Some(read_fd));
         assert_eq!(proto.writable_fd(), Some(write_fd));
@@ -175,45 +173,53 @@ mod tests {
 
         assert!(reactor.add_socket(&mut r, EventSet::readable()).is_ok());
 
-        assert!(reactor.tick().is_ok());
+        assert!(reactor.spin_once().is_ok());
         assert_eq!(proto.readable_fd(), Some(read_fd));
 
         proto.clear_all();
         assert!(w.write(&buf).is_ok());
 
         assert_eq!(proto.readable_fd(), None);
-        assert!(reactor.tick().is_ok());
+        assert!(reactor.spin_once().is_ok());
         assert_eq!(proto.readable_fd(), Some(read_fd));
     }
 
     #[test]
     fn test_reactor_timeout() {
         let (r, _w) = pipe().unwrap();
+        let (r2, mut w2) = pipe().unwrap();
+        let buf = [1, 2, 3, 4];
+        assert!(w2.write(&buf).is_ok());
 
         let mut r = FakeSocket::PReader(r);
+        let mut r2 = FakeSocket::PReader(r2);
 
         let read_fd = r.as_raw_fd();
+        let read2_fd = r2.as_raw_fd();
 
         let mut proto = FakeProtocol::new();
-        let mut reactor = Reactor::new(proto.clone()).unwrap();
+        let config = ReactorConfig::default().timer_tick_interval_ms(20);
+        let mut reactor = Reactor::with_configuration(proto.clone(), config).unwrap();
 
-        let res = reactor.add_socket_timeout(&mut r, EventSet::readable(), 1);
+        let res = reactor.add_socket_timeout(&mut r, EventSet::readable(), 40);
         assert!(res.is_ok());
         let token = res.unwrap();
 
-        ::std::thread::sleep_ms(1);
-        assert!(reactor.tick().is_ok());
+        proto.add_socket(&mut r2, EventSet::readable());
+        ::std::thread::sleep_ms(60);
+        assert!(reactor.spin_once().is_ok());
 
         assert_eq!(proto.readable_fd(), None);
         assert_eq!(proto.timeout_fd(), Some(read_fd));
         proto.clear_all();
 
-        let res = reactor.update_socket_timeout(token, EventSet::none(), 1);
+        let res = reactor.update_socket_timeout(token, EventSet::none(), 40);
         assert!(res.is_ok());
 
-        ::std::thread::sleep_ms(1);
-        assert!(reactor.tick().is_ok());
+        ::std::thread::sleep_ms(60);
+        assert!(reactor.spin_once().is_ok());
 
+        assert_eq!(proto.readable_fd(), Some(read2_fd));
         assert_eq!(proto.timeout_fd(), Some(read_fd));
    }
 
@@ -233,7 +239,7 @@ mod tests {
 
         drop(w); // Trigger disconnect by closing writer
 
-        assert!(reactor.tick().is_ok());
+        assert!(reactor.spin_once().is_ok());
 
         assert_eq!(proto.readable_fd(), Some(read_fd));
         assert_eq!(proto.disconnect_fd(), Some(read_fd));
@@ -256,7 +262,7 @@ mod tests {
         assert!(res.is_ok());
         let token = res.unwrap();
 
-        assert!(reactor.tick().is_ok());
+        assert!(reactor.spin_once().is_ok());
         assert_eq!(proto.readable_fd(), Some(read_fd));
 
         assert!(reactor.update_socket(token, EventSet::none()).is_ok());
@@ -265,7 +271,7 @@ mod tests {
         assert_eq!(proto.readable_fd(), None);
 
         assert!(w.write(&buf).is_ok());
-        assert!(reactor.tick().is_ok());
+        assert!(reactor.spin_once().is_ok());
         assert_eq!(proto.readable_fd(), None);
     }
 
@@ -295,36 +301,36 @@ mod tests {
         proto.add_socket(&mut w2, EventSet::writable());
         proto.update_socket(read_token, EventSet::none());
 
-        // Tick: Writer is not writeable yet, reader is readable from first
+        // spin_once: Writer is not writeable yet, reader is readable from first
         // add_socket call
-        assert!(reactor.tick().is_ok());
+        assert!(reactor.spin_once().is_ok());
         assert_eq!(proto.readable_fd(), Some(read_fd));
 
         proto.clear_all();
         assert_eq!(proto.readable_fd(), None);
 
-        // Tick: reader was updated to none events, tick and assert not readable
+        // spin_once: reader was updated to none events, spin_once and assert not readable
         // Writer should now be writeable
         assert!(w.write(&buf).is_ok());
-        // Set back to readable for next tick
+        // Set back to readable for next spin_once
         proto.update_socket(read_token, EventSet::readable());
-        assert!(reactor.tick().is_ok());
+        assert!(reactor.spin_once().is_ok());
         assert_eq!(proto.readable_fd(), None);
         assert_eq!(proto.writable_fd(), Some(write_fd));
 
-        // Tick: Set back to readable again
+        // spin_once: Set back to readable again
         assert!(w.write(&buf).is_ok());
-        // Tick: Remove read socket for next tick
+        // spin_once: Remove read socket for next spin_once
         proto.remove_socket(read_token);
-        assert!(reactor.tick().is_ok());
+        assert!(reactor.spin_once().is_ok());
         assert_eq!(proto.readable_fd(), Some(read_fd));
 
         proto.clear_all();
         assert_eq!(proto.readable_fd(), None);
 
-        // Tick: Removed read socket, assert no readable sockets
+        // spin_once: Removed read socket, assert no readable sockets
         assert!(w.write(&buf).is_ok());
-        assert!(reactor.tick().is_ok());
+        assert!(reactor.spin_once().is_ok());
         assert_eq!(proto.readable_fd(), None);
     }
 
@@ -345,7 +351,7 @@ mod tests {
         assert!(res.is_ok());
         let token = res.unwrap();
 
-        assert!(reactor.tick().is_ok());
+        assert!(reactor.spin_once().is_ok());
         assert_eq!(proto.readable_fd(), Some(read_fd));
 
         assert!(reactor.remove_socket(token).is_ok());
@@ -354,7 +360,7 @@ mod tests {
         assert!(w.write(&buf).is_ok());
 
         assert_eq!(proto.readable_fd(), None);
-        assert!(reactor.tick().is_ok());
+        assert!(reactor.spin_once().is_ok());
         assert_eq!(proto.readable_fd(), None);
     }
 }

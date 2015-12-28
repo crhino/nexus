@@ -23,4 +23,7 @@ pub trait Protocol {
 
     /// Called when an error registering the socket with the event loop happens.
     fn on_event_loop_error(&mut self, error: ReactorError<Self::Socket>);
+
+    /// Called at the end of of the run loop.
+    fn tick(&mut self, configurer: &mut Configurer<Self::Socket>);
 }
