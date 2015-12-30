@@ -1,4 +1,4 @@
-#![deny(missing_docs, dead_code)]
+// #![deny(missing_docs, dead_code)]
 
 //! # Nexus
 //!
@@ -13,7 +13,7 @@ pub use reactor::{Reactor, ReactorError, ReactorConfig, Configurer};
 mod protocol;
 pub use protocol::Protocol;
 
-// pub mod tcp;
+pub mod tcp;
 
 #[cfg(test)]
 mod test_helpers;
