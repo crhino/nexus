@@ -11,7 +11,7 @@ pub trait TcpProtocol: Protocol {
     fn on_connect(&mut self, configurer: &mut Configurer<Self::Socket>, socket: TcpStream);
 }
 
-struct ReactorProtocol<P> {
+pub struct ReactorProtocol<P> {
     protocol: P,
     listener: TcpListener,
 }
