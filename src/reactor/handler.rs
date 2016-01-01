@@ -261,6 +261,7 @@ impl<P: Protocol> Handler for ReactorHandler<P> {
 
         // Check shutdown at end of tick
         if self.shutdown.load(Ordering::SeqCst) {
+            info!("shutting down event loop");
             event_loop.shutdown();
         }
     }

@@ -69,8 +69,8 @@ impl<P: TcpProtocol> Protocol for ReactorProtocol<P> {
                 Ok(None) => break,
                 Err(e) => {
                     error!("error accepting connections: {:?}", e);
+                    configurer.shutdown(e);
                     return
-                    // TODO: Initate shutdown
                 },
             }
         }

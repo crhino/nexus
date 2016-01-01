@@ -400,15 +400,16 @@ mod tests {
         let (sn, rc) = channel();
         let (done_sn, done_rc) = channel();
 
-        let sht_thread = thread::spawn(move || {
-            rc.recv().unwrap();
-            shutdown.shutdown();
-        });
-
         let reactor_thread = thread::spawn(move || {
-            sn.send(true).unwrap();
+            rc.recv().unwrap();
             assert!(reactor.run().is_ok());
             done_sn.send(true).unwrap();
+        });
+
+        let sht_thread = thread::spawn(move || {
+            // Shutdown first so that reactor only spins once.
+            shutdown.shutdown();
+            sn.send(true).unwrap();
         });
 
         done_rc.recv().unwrap();
