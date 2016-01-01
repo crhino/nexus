@@ -1,10 +1,12 @@
 use protocol::{Protocol};
 use reactor::configurer::{ProtocolConfigurer};
-use reactor::{ReactorError, Configurer, SLAB_GROW_SIZE};
+use reactor::{ReactorError, Configurer, ShutdownHandle, SLAB_GROW_SIZE};
 use mio::{Timeout, EventLoop, EventSet, Token, PollOpt, Handler};
 use mio::util::Slab;
 use std::io;
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc};
 
 enum UpdateError {
     NoSocketFound(Token),
@@ -15,6 +17,8 @@ pub struct ReactorHandler<P: Protocol> {
     protocol: P,
     slab: Slab<P::Socket>,
     timeouts: HashMap<Token, Timeout>,
+    shutdown: Arc<AtomicBool>,
+    proto_error: Option<io::Error>,
 }
 
 impl<P: Protocol> ReactorHandler<P> {
@@ -26,7 +30,24 @@ impl<P: Protocol> ReactorHandler<P> {
             protocol: proto,
             slab: skt_slab,
             timeouts: timeout_map,
+            shutdown: Arc::new(AtomicBool::new(false)),
+            proto_error: None,
         }
+    }
+
+    pub fn shutdown_handle(&self) -> ShutdownHandle {
+        ShutdownHandle(self.shutdown.clone())
+    }
+
+    pub fn set_protocol_error(&mut self, err: io::Error) {
+        if self.proto_error.is_none() {
+            println!("Setting proto error");
+            self.proto_error = Some(err);
+        }
+    }
+
+    pub fn protocol_error(&mut self) -> Option<io::Error> {
+        self.proto_error.take()
     }
 
     fn slab<'a>(&'a mut self) -> &'a mut Slab<P::Socket> {
@@ -237,5 +258,10 @@ impl<P: Protocol> Handler for ReactorHandler<P> {
         let mut configurer = ProtocolConfigurer::new();
         self.protocol.tick(&mut configurer);
         configurer.update_event_loop(event_loop, self);
+
+        // Check shutdown at end of tick
+        if self.shutdown.load(Ordering::SeqCst) {
+            event_loop.shutdown();
+        }
     }
 }

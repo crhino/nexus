@@ -7,6 +7,8 @@ use mio::{EventLoop, EventLoopConfig};
 use std::io::{self};
 use std::error::Error;
 use std::fmt;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc};
 
 use protocol::Protocol;
 
@@ -89,6 +91,13 @@ impl Default for ReactorConfig {
     }
 }
 
+pub struct ShutdownHandle(Arc<AtomicBool>);
+impl ShutdownHandle {
+    pub fn shutdown(&self) {
+        self.0.store(true, Ordering::SeqCst);
+    }
+}
+
 impl<P: Protocol> Reactor<P> {
     /// Create a new Reactor with the default options.
     pub fn new(proto: P) -> io::Result<Reactor<P>> {
@@ -105,14 +114,18 @@ impl<P: Protocol> Reactor<P> {
 
     /// Start and run the Reactor.
     pub fn run(&mut self) -> io::Result<()> {
-        panic!("unimplemented");
-        // TODO: Implement this
+        let &mut Reactor(ref mut event_loop, ref mut handler) = self;
+        event_loop.run(handler).and_then(|_| {
+            match handler.protocol_error() {
+                Some(err) => Err(err),
+                None => Ok(()),
+            }
+        })
     }
 
-    /// Shutdown and consume the Reactor.
-    pub fn shutdown(self) {
-        panic!("unimplemented");
-        // TODO: Implement this
+    /// Handle to shutdown the Reactor.
+    pub fn shutdown_handle(&self) -> ShutdownHandle {
+        self.1.shutdown_handle()
     }
 
     /// spin_once the Reactor for a single iteration.
@@ -120,17 +133,25 @@ impl<P: Protocol> Reactor<P> {
     /// This is mostly used for test purposes.
     pub fn spin_once(&mut self) -> io::Result<()> {
         let &mut Reactor(ref mut event_loop, ref mut handler) = self;
-        event_loop.run_once(handler, Some(1000))
+        event_loop.run_once(handler, Some(1000)).and_then(|_| {
+            match handler.protocol_error() {
+                Some(err) => Err(err),
+                None => Ok(()),
+            }
+        })
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use test_helpers::{FakeProtocol, FakeSocket};
+    use test_helpers::{FakeProtocol, FakeTcpProtocol, FakeSocket};
     use mio::{EventSet};
     use mio::unix::{pipe};
+    use mio::tcp::{TcpListener, TcpStream};
     use std::os::unix::io::{AsRawFd};
-    use std::io::Write;
+    use std::io::{Error, ErrorKind, Write};
+    use std::thread;
+    use std::sync::mpsc::channel;
     use reactor::{Reactor, Configurer, ReactorConfig};
 
     #[test]
@@ -362,5 +383,81 @@ mod tests {
         assert_eq!(proto.readable_fd(), None);
         assert!(reactor.spin_once().is_ok());
         assert_eq!(proto.readable_fd(), None);
+    }
+
+    #[test]
+    fn test_reactor_run_and_shutdown() {
+        let l = TcpListener::bind(&"127.0.0.1:0".parse().unwrap()).unwrap();
+        let addr = l.local_addr().unwrap();
+        let stream1 = TcpStream::connect(&addr).unwrap();
+
+        let proto = FakeTcpProtocol::new();
+        let mut reactor = Reactor::new(proto.clone()).unwrap();
+
+        assert!(reactor.add_socket(stream1, EventSet::writable()).is_ok());
+
+        let shutdown = reactor.shutdown_handle();
+        let (sn, rc) = channel();
+        let (done_sn, done_rc) = channel();
+
+        let sht_thread = thread::spawn(move || {
+            rc.recv().unwrap();
+            shutdown.shutdown();
+        });
+
+        let reactor_thread = thread::spawn(move || {
+            sn.send(true).unwrap();
+            assert!(reactor.run().is_ok());
+            done_sn.send(true).unwrap();
+        });
+
+        done_rc.recv().unwrap();
+
+        sht_thread.join().unwrap();
+        reactor_thread.join().unwrap();
+    }
+
+    #[test]
+    fn test_reactor_spin_once_protocol_error() {
+        let (_r, w) = pipe().unwrap();
+
+        let mut w = FakeSocket::PWriter(w);
+
+        let mut proto = FakeProtocol::new();
+        let err = Error::new(ErrorKind::Other, "error");
+        proto.shutdown_error(err);
+
+        let mut reactor = Reactor::new(proto.clone()).unwrap();
+
+        let res = reactor.add_socket(&mut w, EventSet::writable());
+        assert!(res.is_ok());
+
+        let res = reactor.spin_once();
+        assert!(res.is_err());
+        let err = res.unwrap_err();
+        assert_eq!(err.kind(), ErrorKind::Other);
+    }
+
+    #[test]
+    fn test_reactor_run_protocol_error() {
+        let (r, mut w) = pipe().unwrap();
+        let buf = [1, 2, 3, 4];
+        assert!(w.write(&buf).is_ok());
+
+        let mut r = FakeSocket::PReader(r);
+
+        let mut proto = FakeProtocol::new();
+        let err = Error::new(ErrorKind::Other, "error");
+        proto.shutdown_error(err);
+
+        let mut reactor = Reactor::new(proto.clone()).unwrap();
+
+        let res = reactor.add_socket(&mut r, EventSet::readable());
+        assert!(res.is_ok());
+
+        let res = reactor.run();
+        assert!(res.is_err());
+        let err = res.unwrap_err();
+        assert_eq!(err.kind(), ErrorKind::Other);
     }
 }

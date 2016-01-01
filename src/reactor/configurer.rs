@@ -2,11 +2,13 @@ use mio::{EventSet, EventLoop, Evented};
 
 use protocol::Protocol;
 use reactor::{Reactor, ReactorError, ReactorHandler, Token};
+use std::io;
 
 pub struct ProtocolConfigurer<S> {
-    pub additions: Vec<(S, EventSet, Option<u64>)>,
-    pub removals: Vec<Token>,
-    pub updates: Vec<(Token, EventSet, Option<u64>)>,
+    additions: Vec<(S, EventSet, Option<u64>)>,
+    removals: Vec<Token>,
+    updates: Vec<(Token, EventSet, Option<u64>)>,
+    error: Option<io::Error>,
 }
 
 impl<S: Evented> ProtocolConfigurer<S> {
@@ -15,12 +17,22 @@ impl<S: Evented> ProtocolConfigurer<S> {
             additions: Vec::new(),
             removals: Vec::new(),
             updates: Vec::new(),
+            error: None,
         }
     }
 
-    pub fn update_event_loop<P: Protocol<Socket=S>>(self,
+    pub fn update_event_loop<P: Protocol<Socket=S>>(mut self,
                              event_loop: &mut EventLoop<ReactorHandler<P>>,
                              handler: &mut ReactorHandler<P>) {
+        match self.error.take() {
+            Some(err) => {
+                handler.set_protocol_error(err);
+                handler.shutdown_handle().shutdown();
+                return;
+            },
+            None => {},
+        }
+
         for (s, evt, timeout) in self.additions.into_iter() {
             match handler.add_socket(event_loop, s, evt, timeout) {
                 Ok(_) => {},
@@ -60,6 +72,12 @@ pub trait Configurer<S> {
 
     /// Update the socket associated to the token from the Reactor with a timeout.
     fn update_socket_timeout(&mut self, token: Token, events: EventSet, timeout_ms: u64);
+
+    /// Signal reactor to shutdown at the end of the current iteration.
+    ///
+    /// The error passed in will be returned from the Reactor's run function. If this function
+    /// is called more than once in a single iteration, the first error will be returned.
+    fn shutdown(&mut self, error: io::Error);
 }
 
 impl<S> Configurer<S> for ProtocolConfigurer<S> {
@@ -81,6 +99,12 @@ impl<S> Configurer<S> for ProtocolConfigurer<S> {
 
     fn update_socket_timeout(&mut self, token: Token, events: EventSet, timeout_ms: u64) {
         self.updates.push((token, events, Some(timeout_ms)));
+    }
+
+    fn shutdown(&mut self, error: io::Error) {
+        if self.error.is_none() {
+            self.error = Some(error);
+        }
     }
 }
 
@@ -127,4 +151,30 @@ impl<P: Protocol> Reactor<P> {
             let event_loop = &mut self.0;
             handler.update_socket(event_loop, token, events, Some(timeout_ms))
         }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use reactor::{Reactor};
+    use protocol::Protocol;
+    use std::io::{Error, ErrorKind};
+    use test_helpers::{FakeProtocol};
+
+    #[test]
+    fn test_configurer_shutdown() {
+        let mut configurer: ProtocolConfigurer<<FakeProtocol as Protocol>::Socket>
+            = ProtocolConfigurer::new();
+        let proto = FakeProtocol::new();
+        let Reactor(ref mut event_loop, ref mut handler) = Reactor::new(proto.clone()).unwrap();
+
+        let err = Error::new(ErrorKind::Other, "oh no!");
+        configurer.shutdown(err);
+        configurer.update_event_loop(event_loop, handler);
+
+        let err = handler.protocol_error();
+        assert!(err.is_some());
+        let err = err.unwrap();
+        assert_eq!(err.kind(), ErrorKind::Other);
+    }
 }

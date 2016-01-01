@@ -21,6 +21,7 @@ struct Inner<'a> {
     additions: Mutex<Vec<(&'a mut FakeSocket, EventSet)>>,
     updates: Mutex<Vec<(Token, EventSet)>>,
     removes: Mutex<Vec<Token>>,
+    error: Mutex<Option<io::Error>>,
 }
 
 #[derive(Debug)]
@@ -89,7 +90,7 @@ impl<'a> Protocol for FakeProtocol<'a> {
             let mut guard = self.inner.on_readable_fd.lock().unwrap();
             *guard = Some(socket.as_raw_fd());
         }
-        self.configure_sockets(configurer);
+        self.configure(configurer);
     }
 
     fn on_writable(&mut self, configurer: &mut Configurer<Self::Socket>, socket: &mut Self::Socket, _token: Token) {
@@ -97,7 +98,7 @@ impl<'a> Protocol for FakeProtocol<'a> {
             let mut guard = self.inner.on_writable_fd.lock().unwrap();
             *guard = Some(socket.as_raw_fd());
         }
-        self.configure_sockets(configurer);
+        self.configure(configurer);
     }
 
     fn on_timeout(&mut self, configurer: &mut Configurer<Self::Socket>, socket: &mut Self::Socket, _token: Token) {
@@ -105,7 +106,7 @@ impl<'a> Protocol for FakeProtocol<'a> {
             let mut guard = self.inner.on_timeout_fd.lock().unwrap();
             *guard = Some(socket.as_raw_fd());
         }
-        self.configure_sockets(configurer);
+        self.configure(configurer);
     }
 
     fn on_disconnect(&mut self, configurer: &mut Configurer<Self::Socket>, socket: &mut Self::Socket, _token: Token) {
@@ -113,7 +114,7 @@ impl<'a> Protocol for FakeProtocol<'a> {
             let mut guard = self.inner.on_disconnect_fd.lock().unwrap();
             *guard = Some(socket.as_raw_fd());
         }
-        self.configure_sockets(configurer);
+        self.configure(configurer);
     }
 
     fn on_socket_error(&mut self, configurer: &mut Configurer<Self::Socket>, socket: &mut Self::Socket, _token: Token) {
@@ -121,7 +122,7 @@ impl<'a> Protocol for FakeProtocol<'a> {
             let mut guard = self.inner.on_error_fd.lock().unwrap();
             *guard = Some(socket.as_raw_fd());
         }
-        self.configure_sockets(configurer);
+        self.configure(configurer);
     }
 
     fn on_event_loop_error(&mut self, error: ReactorError<Self::Socket>) {
@@ -129,7 +130,7 @@ impl<'a> Protocol for FakeProtocol<'a> {
     }
 
     fn tick(&mut self, configurer: &mut Configurer<Self::Socket>) {
-        self.configure_sockets(configurer);
+        self.configure(configurer);
     }
 }
 
@@ -141,10 +142,10 @@ impl<'a> FakeProtocol<'a> {
             on_timeout_fd: Mutex::new(None),
             on_disconnect_fd: Mutex::new(None),
             on_error_fd: Mutex::new(None),
-            // phantom: PhantomData,
             additions: Mutex::new(Vec::new()),
             updates: Mutex::new(Vec::new()),
             removes: Mutex::new(Vec::new()),
+            error: Mutex::new(None),
         };
 
         FakeProtocol{
@@ -184,7 +185,21 @@ impl<'a> FakeProtocol<'a> {
         guard.push(socket);
     }
 
-    fn configure_sockets(&mut self, event_configurer: &mut Configurer<<Self as Protocol>::Socket>) {
+    pub fn shutdown_error(&mut self, err: io::Error) {
+        let mut guard = self.inner.error.lock().unwrap();
+        *guard = Some(err);
+    }
+
+    fn configure(&mut self, event_configurer: &mut Configurer<<Self as Protocol>::Socket>) {
+        let mut err_guard = self.inner.error.lock().unwrap();
+        match err_guard.take() {
+            Some(err) => {
+                event_configurer.shutdown(err);
+                return;
+            },
+            None => {},
+        }
+
         let mut guard = self.inner.additions.lock().unwrap();
         while let Some((socket, events)) = guard.pop() {
             event_configurer.add_socket(socket, events);
