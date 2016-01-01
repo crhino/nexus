@@ -8,7 +8,7 @@ extern crate mio;
 #[macro_use] extern crate log;
 
 mod reactor;
-pub use reactor::{Reactor, ReactorError, ReactorConfig, Configurer};
+pub use reactor::{Token, Reactor, ReactorError, ReactorConfig, Configurer};
 
 mod protocol;
 pub use protocol::Protocol;
