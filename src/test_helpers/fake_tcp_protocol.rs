@@ -26,31 +26,27 @@ impl FakeTcpProtocol {
 impl Protocol for FakeTcpProtocol {
     type Socket = TcpStream;
 
-    fn on_readable(&mut self, _configurer: &mut Configurer<Self::Socket>, _socket: &mut Self::Socket, _token: Token) {
-    }
+    fn on_readable<C>(&mut self, _configurer: &mut C, _socket: &mut Self::Socket, _token: Token) where C: Configurer<Self::Socket> {}
 
-    fn on_writable(&mut self, _configurer: &mut Configurer<Self::Socket>, _socket: &mut Self::Socket, _token: Token) {
-    }
+    fn on_writable<C>(&mut self, _configurer: &mut C, _socket: &mut Self::Socket, _token: Token) where C: Configurer<Self::Socket> {}
 
-    fn on_timeout(&mut self, _configurer: &mut Configurer<Self::Socket>, _socket: &mut Self::Socket, _token: Token) {
-    }
+    fn on_timeout<C>(&mut self, _configurer: &mut C, _socket: &mut Self::Socket, _token: Token) where C: Configurer<Self::Socket> {}
 
-    fn on_disconnect(&mut self, _configurer: &mut Configurer<Self::Socket>, _socket: &mut Self::Socket, _token: Token) {
-    }
+    fn on_disconnect<C>(&mut self, _configurer: &mut C, _socket: &mut Self::Socket, _token: Token) where C: Configurer<Self::Socket> {}
 
-    fn on_socket_error(&mut self, _configurer: &mut Configurer<Self::Socket>, _socket: &mut Self::Socket, _token: Token) {
-    }
+    fn on_socket_error<C>(&mut self, _configurer: &mut C, _socket: &mut Self::Socket, _token: Token) where C: Configurer<Self::Socket> {}
 
     fn on_event_loop_error(&mut self, error: ReactorError<Self::Socket>) {
-        panic!("event loop error: {:?}", error);
+        panic!("fake tcp event loop error: {:?}", error)
     }
 
-    fn tick(&mut self, _configurer: &mut Configurer<Self::Socket>) {
-    }
+    fn tick<C>(&mut self, _configurer: &mut C) where C: Configurer<Self::Socket> {}
 }
 
 impl TcpProtocol for FakeTcpProtocol {
-    fn on_connect(&mut self, configurer: &mut Configurer<Self::Socket>, socket: TcpStream) {
+    fn on_connect<C>(&mut self,
+                     configurer: &mut C,
+                     socket: TcpStream) where C: Configurer<Self::Socket> {
         self.connect_count.fetch_add(1, Ordering::SeqCst);
         configurer.add_socket(socket, EventSet::readable());
     }

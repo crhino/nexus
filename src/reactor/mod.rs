@@ -4,11 +4,12 @@ pub use mio::Token;
 pub use reactor::handler::ReactorHandler;
 
 use mio::{EventLoop, EventLoopConfig};
-use std::io::{self};
+use std::io::{self, ErrorKind};
 use std::error::Error;
 use std::fmt;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc};
+use std::convert::Into;
 
 use protocol::Protocol;
 
@@ -32,6 +33,20 @@ pub enum ReactorError<S> {
     NoSocketFound(Token),
     /// An error occurred while adding a timeout.
     TimerError,
+}
+
+impl<S> Into<io::Error> for ReactorError<S> {
+    fn into(self) -> io::Error {
+        match self {
+            ReactorError::IoError(err, _s) => err,
+            ReactorError::NoSocketFound(_t) => {
+                io::Error::new(ErrorKind::Other, format!("{}", self))
+            },
+            ReactorError::TimerError => {
+                io::Error::new(ErrorKind::Other, format!("{}", self))
+            },
+        }
+    }
 }
 
 impl<S> fmt::Display for ReactorError<S> {

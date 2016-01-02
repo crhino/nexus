@@ -229,9 +229,9 @@ impl<P: Protocol> ReactorHandler<P> {
             })
     }
 
-    fn timeout(&mut self,
-               configurer: &mut Configurer<P::Socket>,
-               timeout: Token) {
+    fn timeout<C>(&mut self,
+               configurer: &mut C,
+               timeout: Token) where C: Configurer<P::Socket> {
         let socket = &mut self.slab[timeout];
         self.timeouts.remove(&timeout);
         self.protocol.on_timeout(configurer, socket, timeout);

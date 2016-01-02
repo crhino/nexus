@@ -75,7 +75,10 @@ impl AsRawFd for FakeSocket {
 impl<'a> Protocol for FakeProtocol<'a> {
     type Socket = &'a mut FakeSocket;
 
-    fn on_readable(&mut self, configurer: &mut Configurer<Self::Socket>, socket: &mut Self::Socket, _token: Token) {
+    fn on_readable<C>(&mut self,
+                      configurer: &mut C,
+                      socket: &mut Self::Socket,
+                      _token: Token) where C: Configurer<Self::Socket> {
         let mut buf = [0u8, 32];
         let res = match *socket {
             &mut PReader(ref mut r) => r.read(&mut buf),
@@ -93,7 +96,10 @@ impl<'a> Protocol for FakeProtocol<'a> {
         self.configure(configurer);
     }
 
-    fn on_writable(&mut self, configurer: &mut Configurer<Self::Socket>, socket: &mut Self::Socket, _token: Token) {
+    fn on_writable<C>(&mut self,
+                      configurer: &mut C,
+                      socket: &mut Self::Socket,
+                      _token: Token) where C: Configurer<Self::Socket> {
         {
             let mut guard = self.inner.on_writable_fd.lock().unwrap();
             *guard = Some(socket.as_raw_fd());
@@ -101,7 +107,10 @@ impl<'a> Protocol for FakeProtocol<'a> {
         self.configure(configurer);
     }
 
-    fn on_timeout(&mut self, configurer: &mut Configurer<Self::Socket>, socket: &mut Self::Socket, _token: Token) {
+    fn on_timeout<C>(&mut self,
+                     configurer: &mut C,
+                     socket: &mut Self::Socket,
+                     _token: Token) where C: Configurer<Self::Socket> {
         {
             let mut guard = self.inner.on_timeout_fd.lock().unwrap();
             *guard = Some(socket.as_raw_fd());
@@ -109,7 +118,10 @@ impl<'a> Protocol for FakeProtocol<'a> {
         self.configure(configurer);
     }
 
-    fn on_disconnect(&mut self, configurer: &mut Configurer<Self::Socket>, socket: &mut Self::Socket, _token: Token) {
+    fn on_disconnect<C>(&mut self,
+                        configurer: &mut C,
+                        socket: &mut Self::Socket,
+                        _token: Token) where C: Configurer<Self::Socket> {
         {
             let mut guard = self.inner.on_disconnect_fd.lock().unwrap();
             *guard = Some(socket.as_raw_fd());
@@ -117,7 +129,10 @@ impl<'a> Protocol for FakeProtocol<'a> {
         self.configure(configurer);
     }
 
-    fn on_socket_error(&mut self, configurer: &mut Configurer<Self::Socket>, socket: &mut Self::Socket, _token: Token) {
+    fn on_socket_error<C>(&mut self,
+                          configurer: &mut C,
+                          socket: &mut Self::Socket,
+                          _token: Token) where C: Configurer<Self::Socket> {
         {
             let mut guard = self.inner.on_error_fd.lock().unwrap();
             *guard = Some(socket.as_raw_fd());
@@ -129,7 +144,7 @@ impl<'a> Protocol for FakeProtocol<'a> {
         panic!("Received error: {:?}", error);
     }
 
-    fn tick(&mut self, configurer: &mut Configurer<Self::Socket>) {
+    fn tick<C>(&mut self, configurer: &mut C) where C: Configurer<Self::Socket> {
         self.configure(configurer);
     }
 }
