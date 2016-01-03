@@ -14,14 +14,19 @@ pub trait TcpProtocol: Protocol {
     fn on_connect<C>(&mut self, configurer: &mut C, socket: TcpStream) where C: Configurer<Self::Socket>;
 }
 
-pub struct ReactorProtocol<P> {
+/// A Protocol that deals with setting up a TcpListener with the event loop and calling the
+/// `TcpProtocol::on_connect` method.
+pub struct ListenerProtocol<P> {
     protocol: P,
+    listener: Option<TcpListener>,
 }
 
-impl<P> ReactorProtocol<P> {
-    pub fn new(proto: P) -> ReactorProtocol<P> {
-        ReactorProtocol{
+impl<P> ListenerProtocol<P> {
+    /// Create a new ListenerProtocol
+    pub fn new(proto: P, listener: TcpListener) -> ListenerProtocol<P> {
+        ListenerProtocol{
             protocol: proto,
+            listener: Some(listener),
         }
     }
 }
@@ -103,7 +108,7 @@ impl<'a, S, C: Configurer<TcpSocket<S>>> Configurer<S> for TcpConfigurer<'a, S, 
     }
 }
 
-impl<P: TcpProtocol> TcpProtocol for ReactorProtocol<P> {
+impl<P: TcpProtocol> TcpProtocol for ListenerProtocol<P> {
     fn on_connect<C>(&mut self,
                      configurer: &mut C,
                      socket: TcpStream) where C: Configurer<Self::Socket> {
@@ -112,8 +117,22 @@ impl<P: TcpProtocol> TcpProtocol for ReactorProtocol<P> {
     }
 }
 
-impl<P: TcpProtocol> Protocol for ReactorProtocol<P> {
+impl<P: TcpProtocol> Protocol for ListenerProtocol<P> {
     type Socket = TcpSocket<P::Socket>;
+
+    fn on_start<C>(&mut self, configurer: &mut C) where C: Configurer<Self::Socket> {
+        let listener = match self.listener.take() {
+            Some(l) => l,
+            None => {
+                panic!("protocol already started");
+            },
+        };
+
+        let l = TcpSocket::Listener(listener);
+        configurer.add_socket(l, EventSet::readable());
+        let mut c = TcpConfigurer::new(configurer);
+        self.protocol.on_start(&mut c);
+    }
 
     fn on_readable<C>(&mut self,
                       configurer: &mut C,
@@ -207,29 +226,34 @@ impl<P: TcpProtocol> Protocol for ReactorProtocol<P> {
         }
     }
 
-    fn on_event_loop_error(&mut self, error: ReactorError<Self::Socket>) {
-        match error {
-            ReactorError::IoError(err, s) => {
-                match s {
-                    TcpSocket::Listener(_) => {
-                        error!("received event loop error for listener: {:?}", err);
-                        // TODO: Make this better
-                        panic!(err);
-                    },
-                    TcpSocket::Socket(skt) => {
-                        let err = ReactorError::IoError(err, skt);
-                        self.protocol.on_event_loop_error(err)
-                    },
-                }
-            },
-            ReactorError::NoSocketFound(t) => {
-                self.protocol.on_event_loop_error(ReactorError::NoSocketFound(t))
-            },
-            ReactorError::TimerError => {
-                self.protocol.on_event_loop_error(ReactorError::TimerError)
-            },
+    fn on_event_loop_error<C>(&mut self,
+                              configurer: &mut C,
+                              error: ReactorError<Self::Socket>)
+        where C: Configurer<Self::Socket> {
+            match error {
+                ReactorError::IoError(err, s) => {
+                    match s {
+                        TcpSocket::Listener(_) => {
+                            error!("received event loop error for listener: {:?}", err);
+                            configurer.shutdown(err);
+                        },
+                        TcpSocket::Socket(skt) => {
+                            let mut c = TcpConfigurer::new(configurer);
+                            let err = ReactorError::IoError(err, skt);
+                            self.protocol.on_event_loop_error(&mut c, err)
+                        },
+                    }
+                },
+                ReactorError::NoSocketFound(t) => {
+                    let mut c = TcpConfigurer::new(configurer);
+                    self.protocol.on_event_loop_error(&mut c, ReactorError::NoSocketFound(t))
+                },
+                ReactorError::TimerError => {
+                    let mut c = TcpConfigurer::new(configurer);
+                    self.protocol.on_event_loop_error(&mut c, ReactorError::TimerError)
+                },
+            }
         }
-    }
 
     fn tick<C>(&mut self, configurer: &mut C) where C: Configurer<Self::Socket> {
         let mut c = TcpConfigurer::new(configurer);
@@ -244,15 +268,19 @@ mod tests {
     use test_helpers::{FakeTcpProtocol};
     use protocol::Protocol;
     use std::thread;
-    use super::{ReactorProtocol, TcpSocket};
+    use std::sync::mpsc::channel;
+    use std::io::{ErrorKind, Error};
+    use super::{ListenerProtocol, TcpSocket};
     use reactor::configurer::{ProtocolConfigurer};
+    use reactor::{Reactor, ReactorError};
 
     #[test]
     fn test_adding_new_connections() {
         let l = TcpListener::bind(&"127.0.0.1:0".parse().unwrap()).unwrap();
         let addr = l.local_addr().unwrap();
         let proto = FakeTcpProtocol::new();
-        let mut reactor_proto = ReactorProtocol::new(proto.clone());
+        let l_clone = l.try_clone().unwrap();
+        let mut reactor_proto = ListenerProtocol::new(proto.clone(), l_clone);
         let mut configurer = ProtocolConfigurer::new();
 
         let handle = thread::spawn(move || {
@@ -264,5 +292,67 @@ mod tests {
         reactor_proto.on_readable(&mut configurer, &mut TcpSocket::Listener(l), Token(0));
 
         assert_eq!(proto.connect_count(), 2);
+    }
+
+    #[test]
+    fn test_shutdown_on_error() {
+        let l = TcpListener::bind(&"127.0.0.1:0".parse().unwrap()).unwrap();
+        let addr = l.local_addr().unwrap();
+        let proto = FakeTcpProtocol::new();
+        let l_clone = l.try_clone().unwrap();
+        let mut reactor_proto = ListenerProtocol::new(proto.clone(), l_clone);
+        let mut configurer = ProtocolConfigurer::new();
+
+        let handle = thread::spawn(move || {
+            let _stream1 = TcpStream::connect(&addr).unwrap();
+            let _stream2 = TcpStream::connect(&addr).unwrap();
+        });
+
+        handle.join().unwrap();
+        let ioerr = Error::new(ErrorKind::Other, "test tcp listener error");
+        let err = ReactorError::IoError(ioerr, TcpSocket::Listener(l));
+        reactor_proto.on_event_loop_error(&mut configurer, err);
+
+        assert!(configurer.error.is_some());
+    }
+
+    #[test]
+    fn test_tcp_run_and_shutdown() {
+        let l = TcpListener::bind(&"127.0.0.1:0".parse().unwrap()).unwrap();
+        let addr = l.local_addr().unwrap();
+
+        let fake = FakeTcpProtocol::new();
+        let proto = ListenerProtocol::new(fake.clone(), l);
+        let mut reactor = Reactor::new(proto).unwrap();
+
+
+        // Another thread that connects to listener
+        let stream_thread = thread::spawn(move || {
+            let _stream1 = TcpStream::connect(&addr).unwrap();
+        });
+        stream_thread.join().unwrap();
+
+        let shutdown = reactor.shutdown_handle();
+        let (sn, rc) = channel();
+        let (done_sn, done_rc) = channel();
+
+        let reactor_thread = thread::spawn(move || {
+            rc.recv().unwrap();
+            assert!(reactor.run().is_ok());
+            done_sn.send(true).unwrap();
+        });
+
+        let sht_thread = thread::spawn(move || {
+            // Shutdown first so that reactor only spins once.
+            shutdown.shutdown();
+            sn.send(true).unwrap();
+        });
+
+        done_rc.recv().unwrap();
+
+        sht_thread.join().unwrap();
+        reactor_thread.join().unwrap();
+
+        assert_eq!(fake.connect_count(), 1);
     }
 }

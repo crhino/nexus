@@ -1,4 +1,5 @@
 use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::os::unix::io::{RawFd, AsRawFd};
 use mio::{Selector, PollOpt, Token, EventSet, Evented};
 use mio::unix::{PipeReader, PipeWriter};
@@ -18,6 +19,7 @@ struct Inner<'a> {
     on_timeout_fd: Mutex<Option<RawFd>>,
     on_disconnect_fd: Mutex<Option<RawFd>>,
     on_error_fd: Mutex<Option<RawFd>>,
+    on_start: AtomicBool,
     additions: Mutex<Vec<(&'a mut FakeSocket, EventSet)>>,
     updates: Mutex<Vec<(Token, EventSet)>>,
     removes: Mutex<Vec<Token>>,
@@ -74,6 +76,10 @@ impl AsRawFd for FakeSocket {
 
 impl<'a> Protocol for FakeProtocol<'a> {
     type Socket = &'a mut FakeSocket;
+
+    fn on_start<C>(&mut self, _configurer: &mut C) where C: Configurer<Self::Socket> {
+        self.inner.on_start.store(true, Ordering::SeqCst);
+    }
 
     fn on_readable<C>(&mut self,
                       configurer: &mut C,
@@ -140,9 +146,12 @@ impl<'a> Protocol for FakeProtocol<'a> {
         self.configure(configurer);
     }
 
-    fn on_event_loop_error(&mut self, error: ReactorError<Self::Socket>) {
-        panic!("Received error: {:?}", error);
-    }
+    fn on_event_loop_error<C>(&mut self,
+                              _configurer: &mut C,
+                              error: ReactorError<Self::Socket>)
+        where C: Configurer<Self::Socket> {
+            panic!("Received error: {:?}", error);
+        }
 
     fn tick<C>(&mut self, configurer: &mut C) where C: Configurer<Self::Socket> {
         self.configure(configurer);
@@ -157,6 +166,7 @@ impl<'a> FakeProtocol<'a> {
             on_timeout_fd: Mutex::new(None),
             on_disconnect_fd: Mutex::new(None),
             on_error_fd: Mutex::new(None),
+            on_start: AtomicBool::new(false),
             additions: Mutex::new(Vec::new()),
             updates: Mutex::new(Vec::new()),
             removes: Mutex::new(Vec::new()),
@@ -183,6 +193,12 @@ impl<'a> FakeProtocol<'a> {
 
         let mut guard = self.inner.on_disconnect_fd.lock().unwrap();
         *guard = None;
+
+        self.inner.on_start.store(false, Ordering::SeqCst);
+    }
+
+    pub fn started(&self) -> bool {
+        self.inner.on_start.load(Ordering::SeqCst)
     }
 
     pub fn add_socket(&mut self, socket: &'a mut FakeSocket, events: EventSet) {

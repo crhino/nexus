@@ -6,6 +6,9 @@ pub trait Protocol {
     /// Socket type for the Protocol
     type Socket: Evented;
 
+    /// Called right before starting the Reactor.
+    fn on_start<C>(&mut self, configurer: &mut C) where C: Configurer<Self::Socket>;
+
     /// Called when the socket is readable.
     fn on_readable<C>(&mut self, configurer: &mut C, socket: &mut Self::Socket, token: Token) where C: Configurer<Self::Socket>;
 
@@ -22,7 +25,7 @@ pub trait Protocol {
     fn on_socket_error<C>(&mut self, configurer: &mut C, socket: &mut Self::Socket, token: Token) where C: Configurer<Self::Socket>;
 
     /// Called when an error registering the socket with the event loop happens.
-    fn on_event_loop_error(&mut self, error: ReactorError<Self::Socket>);
+    fn on_event_loop_error<C>(&mut self, configurer: &mut C, error: ReactorError<Self::Socket>) where C: Configurer<Self::Socket>;
 
     /// Called at the end of of the run loop.
     fn tick<C>(&mut self, configurer: &mut C) where C: Configurer<Self::Socket>;

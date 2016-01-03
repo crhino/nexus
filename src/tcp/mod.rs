@@ -16,6 +16,8 @@
 //! # struct FakeTcpProtocol;
 //! # impl Protocol for FakeTcpProtocol {
 //! #    type Socket = TcpStream;
+
+//! #   fn on_start<C>(&mut self, _configurer: &mut C) where C: Configurer<Self::Socket> {}
 //! #
 //! #   fn on_readable<C>(&mut self, _configurer: &mut C, _socket: &mut Self::Socket, _token: Token) where C: Configurer<Self::Socket> {}
 //! #
@@ -27,7 +29,7 @@
 //! #
 //! #   fn on_socket_error<C>(&mut self, configurer: &mut C, socket: &mut Self::Socket, token: Token) where C: Configurer<Self::Socket> {}
 //! #
-//! #   fn on_event_loop_error(&mut self, error: ReactorError<Self::Socket>) {
+//! #   fn on_event_loop_error<C>(&mut self, configurer: &mut C, error: ReactorError<Self::Socket>) where C: Configurer<Self::Socket> {
 //! #       panic!("fake tcp event loop error: {:?}", error)
 //! #   }
 
@@ -38,18 +40,16 @@
 //! #    fn on_connect<C>(&mut self, configurer: &mut C, socket: TcpStream) where C: Configurer<Self::Socket> {}
 //! # }
 //!
-//! use nexus::tcp::TcpReactor;
+//! use nexus::tcp::ListenerProtocol;
+//! use nexus::Reactor;
 //! use mio::tcp::TcpListener;
 //!
 //! fn main() {
 //!     let listener = TcpListener::bind(&"127.0.0.1:0".parse().unwrap()).unwrap();
-//!     let protocol = FakeTcpProtocol;
-//!     let mut reactor = TcpReactor::new(protocol, listener).unwrap();
+//!     let protocol = ListenerProtocol::new(FakeTcpProtocol, listener);
+//!     let mut reactor = Reactor::new(protocol).unwrap();
 //!     reactor.run().unwrap();
 //! }
 //! ```
 mod protocol;
-pub use tcp::protocol::TcpProtocol;
-
-mod tcp_reactor;
-pub use tcp::tcp_reactor::{TcpReactor};
+pub use tcp::protocol::{TcpProtocol, ListenerProtocol};

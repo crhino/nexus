@@ -18,6 +18,7 @@ const SLAB_GROW_SIZE: usize = 1024;
 /// A Reactor runs the event loop and manages sockets
 pub struct Reactor<P: Protocol>(EventLoop<ReactorHandler<P>>, ReactorHandler<P>);
 
+#[derive(Debug, Clone)]
 /// Configuration for the Reactor
 pub struct ReactorConfig {
     timer_capacity: usize,
@@ -121,8 +122,15 @@ impl<P: Protocol> Reactor<P> {
 
     /// Create a new Reactor with the specified configuration.
     pub fn with_configuration(proto: P, config: ReactorConfig) -> io::Result<Reactor<P>> {
+        let shutdown = Arc::new(AtomicBool::new(false));
+        Reactor::with_config_and_shutdown(proto, config, shutdown)
+    }
+
+    fn with_config_and_shutdown(proto: P,
+                                config: ReactorConfig,
+                                shutdown: Arc<AtomicBool>) -> io::Result<Reactor<P>> {
         let event_loop = try!(EventLoop::configured(config.to_event_loop_config()));
-        let handler = ReactorHandler::new(proto);
+        let handler = ReactorHandler::new(proto, shutdown);
 
         Ok(Reactor(event_loop, handler))
     }
@@ -130,6 +138,8 @@ impl<P: Protocol> Reactor<P> {
     /// Start and run the Reactor.
     pub fn run(&mut self) -> io::Result<()> {
         let &mut Reactor(ref mut event_loop, ref mut handler) = self;
+        try!(handler.init_protocol(event_loop));
+
         event_loop.run(handler).and_then(|_| {
             match handler.protocol_error() {
                 Some(err) => Err(err),
@@ -148,6 +158,8 @@ impl<P: Protocol> Reactor<P> {
     /// This is mostly used for test purposes.
     pub fn spin_once(&mut self) -> io::Result<()> {
         let &mut Reactor(ref mut event_loop, ref mut handler) = self;
+        try!(handler.init_protocol(event_loop));
+
         event_loop.run_once(handler, Some(1000)).and_then(|_| {
             match handler.protocol_error() {
                 Some(err) => Err(err),
@@ -475,5 +487,6 @@ mod tests {
         assert!(res.is_err());
         let err = res.unwrap_err();
         assert_eq!(err.kind(), ErrorKind::Other);
+        assert!(proto.started());
     }
 }

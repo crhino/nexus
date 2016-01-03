@@ -26,6 +26,8 @@ impl FakeTcpProtocol {
 impl Protocol for FakeTcpProtocol {
     type Socket = TcpStream;
 
+    fn on_start<C>(&mut self, _configurer: &mut C) where C: Configurer<Self::Socket> {}
+
     fn on_readable<C>(&mut self, _configurer: &mut C, _socket: &mut Self::Socket, _token: Token) where C: Configurer<Self::Socket> {}
 
     fn on_writable<C>(&mut self, _configurer: &mut C, _socket: &mut Self::Socket, _token: Token) where C: Configurer<Self::Socket> {}
@@ -36,7 +38,7 @@ impl Protocol for FakeTcpProtocol {
 
     fn on_socket_error<C>(&mut self, _configurer: &mut C, _socket: &mut Self::Socket, _token: Token) where C: Configurer<Self::Socket> {}
 
-    fn on_event_loop_error(&mut self, error: ReactorError<Self::Socket>) {
+    fn on_event_loop_error<C>(&mut self, _configurer: &mut C, error: ReactorError<Self::Socket>) where C: Configurer<Self::Socket> {
         panic!("fake tcp event loop error: {:?}", error)
     }
 

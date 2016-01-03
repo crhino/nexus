@@ -22,7 +22,7 @@ pub struct ReactorHandler<P: Protocol> {
 }
 
 impl<P: Protocol> ReactorHandler<P> {
-    pub fn new(proto: P) -> ReactorHandler<P> {
+    pub fn new(proto: P, shutdown: Arc<AtomicBool>) -> ReactorHandler<P> {
         //TODO: Figure out what to actually start at
         let skt_slab = Slab::new_starting_at(Token(100), SLAB_GROW_SIZE);
         let timeout_map = HashMap::with_capacity(SLAB_GROW_SIZE);
@@ -30,7 +30,7 @@ impl<P: Protocol> ReactorHandler<P> {
             protocol: proto,
             slab: skt_slab,
             timeouts: timeout_map,
-            shutdown: Arc::new(AtomicBool::new(false)),
+            shutdown: shutdown,
             proto_error: None,
         }
     }
@@ -48,6 +48,16 @@ impl<P: Protocol> ReactorHandler<P> {
 
     pub fn protocol_error(&mut self) -> Option<io::Error> {
         self.proto_error.take()
+    }
+
+    pub fn init_protocol(&mut self, event_loop: &mut EventLoop<Self>) -> io::Result<()> {
+        let mut configurer = ProtocolConfigurer::new();
+        self.protocol.on_start(&mut configurer);
+        configurer.update_event_loop(event_loop, self);
+        match self.protocol_error() {
+            Some(err) => Err(err),
+            None => Ok(()),
+        }
     }
 
     fn slab<'a>(&'a mut self) -> &'a mut Slab<P::Socket> {
@@ -76,8 +86,10 @@ impl<P: Protocol> ReactorHandler<P> {
         }
     }
 
-    pub fn event_loop_error(&mut self, err: ReactorError<P::Socket>) {
-        self.protocol.on_event_loop_error(err)
+    pub fn event_loop_error(&mut self, event_loop: &mut EventLoop<Self>, err: ReactorError<P::Socket>) {
+        let mut configurer = ProtocolConfigurer::new();
+        self.protocol.on_event_loop_error(&mut configurer, err);
+        configurer.update_event_loop(event_loop, self);
     }
 
     fn add_timeout(&mut self, event_loop: &mut EventLoop<Self>, token: Token, time: u64)

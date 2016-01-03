@@ -5,10 +5,10 @@ use reactor::{Reactor, ReactorError, ReactorHandler, Token};
 use std::io;
 
 pub struct ProtocolConfigurer<S> {
-    additions: Vec<(S, EventSet, Option<u64>)>,
-    removals: Vec<Token>,
-    updates: Vec<(Token, EventSet, Option<u64>)>,
-    error: Option<io::Error>,
+    pub additions: Vec<(S, EventSet, Option<u64>)>,
+    pub removals: Vec<Token>,
+    pub updates: Vec<(Token, EventSet, Option<u64>)>,
+    pub error: Option<io::Error>,
 }
 
 impl<S: Evented> ProtocolConfigurer<S> {
@@ -36,21 +36,21 @@ impl<S: Evented> ProtocolConfigurer<S> {
         for (s, evt, timeout) in self.additions.into_iter() {
             match handler.add_socket(event_loop, s, evt, timeout) {
                 Ok(_) => {},
-                Err(e) => handler.event_loop_error(e),
+                Err(e) => handler.event_loop_error(event_loop, e),
             }
         }
 
         for (s, evt, timeout) in self.updates.into_iter() {
             match handler.update_socket(event_loop, s, evt, timeout) {
                 Ok(_) => {},
-                Err(e) => handler.event_loop_error(e),
+                Err(e) => handler.event_loop_error(event_loop, e),
             }
         }
 
         for s in self.removals.into_iter() {
             match handler.remove_socket(event_loop, s) {
                 Ok(_) => {},
-                Err(e) => handler.event_loop_error(e),
+                Err(e) => handler.event_loop_error(event_loop, e),
             }
         }
     }
