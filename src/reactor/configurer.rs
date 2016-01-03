@@ -158,7 +158,8 @@ mod tests {
     use super::*;
     use reactor::{Reactor};
     use protocol::Protocol;
-    use std::io::{Error, ErrorKind};
+    use std::io::{self, ErrorKind};
+    use std::error::Error;
     use test_helpers::{FakeProtocol};
 
     #[test]
@@ -168,7 +169,7 @@ mod tests {
         let proto = FakeProtocol::new();
         let Reactor(ref mut event_loop, ref mut handler) = Reactor::new(proto.clone()).unwrap();
 
-        let err = Error::new(ErrorKind::Other, "oh no!");
+        let err = io::Error::new(ErrorKind::Other, "oh no!");
         configurer.shutdown(err);
         configurer.update_event_loop(event_loop, handler);
 
@@ -176,5 +177,6 @@ mod tests {
         assert!(err.is_some());
         let err = err.unwrap();
         assert_eq!(err.kind(), ErrorKind::Other);
+        assert_eq!(err.description(), "oh no!");
     }
 }

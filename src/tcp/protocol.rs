@@ -2,7 +2,7 @@ use protocol::Protocol;
 use reactor::{Token, Configurer, ReactorError};
 use mio::tcp::{TcpStream, TcpListener};
 use mio::{EventSet, Selector, PollOpt, Evented};
-use std::io::{self};
+use std::io::{self, Error, ErrorKind};
 use std::marker::PhantomData;
 
 /// Trait used with a TCP reactor.
@@ -149,7 +149,7 @@ impl<P: TcpProtocol> Protocol for ReactorProtocol<P> {
                       token: Token) where C: Configurer<Self::Socket> {
         match *socket {
             TcpSocket::Listener(_) => {
-                panic!("listener is writable");
+                error!("received writable event for listener");
             },
             TcpSocket::Socket(ref mut s) => {
                 let mut c = TcpConfigurer::new(configurer);
@@ -164,7 +164,7 @@ impl<P: TcpProtocol> Protocol for ReactorProtocol<P> {
                      token: Token) where C: Configurer<Self::Socket> {
         match *socket {
             TcpSocket::Listener(_) => {
-                panic!("listener timed out");
+                error!("received timeout event for listener");
             },
             TcpSocket::Socket(ref mut s) => {
                 let mut c = TcpConfigurer::new(configurer);
@@ -179,7 +179,9 @@ impl<P: TcpProtocol> Protocol for ReactorProtocol<P> {
                         token: Token) where C: Configurer<Self::Socket> {
         match *socket {
             TcpSocket::Listener(_) => {
-                panic!("listener disconnected");
+                error!("received disconnect event for listener");
+                let err = Error::new(ErrorKind::Other, "listener disconnected");
+                configurer.shutdown(err);
             },
             TcpSocket::Socket(ref mut s) => {
                 let mut c = TcpConfigurer::new(configurer);
@@ -194,7 +196,9 @@ impl<P: TcpProtocol> Protocol for ReactorProtocol<P> {
                           token: Token) where C: Configurer<Self::Socket> {
         match *socket {
             TcpSocket::Listener(_) => {
-                panic!("listener socket error");
+                error!("received socket error event for listener");
+                let err = Error::new(ErrorKind::Other, "listener socket error");
+                configurer.shutdown(err);
             },
             TcpSocket::Socket(ref mut s) => {
                 let mut c = TcpConfigurer::new(configurer);
@@ -208,7 +212,9 @@ impl<P: TcpProtocol> Protocol for ReactorProtocol<P> {
             ReactorError::IoError(err, s) => {
                 match s {
                     TcpSocket::Listener(_) => {
-                        panic!("listener event loop error");
+                        error!("received event loop error for listener: {:?}", err);
+                        // TODO: Make this better
+                        panic!(err);
                     },
                     TcpSocket::Socket(skt) => {
                         let err = ReactorError::IoError(err, skt);
