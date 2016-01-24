@@ -1,9 +1,7 @@
-pub mod configurer;
-mod handler; pub use reactor::configurer::{Configurer};
-pub use mio::Token;
+pub use rotor::Token;
 pub use reactor::handler::ReactorHandler;
 
-use mio::{EventLoop, EventLoopConfig};
+use rotor::{EventLoop, EventLoopConfig};
 use std::io::{self, ErrorKind};
 use std::error::Error;
 use std::fmt;
@@ -11,12 +9,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc};
 use std::convert::Into;
 
-use protocol::Protocol;
-
-const SLAB_GROW_SIZE: usize = 1024;
-
 /// A Reactor runs the event loop and manages sockets
-pub struct Reactor<P: Protocol>(EventLoop<ReactorHandler<P>>, ReactorHandler<P>);
+pub struct Reactor<>(EventLoop<>, );
 
 #[derive(Debug, Clone)]
 /// Configuration for the Reactor
@@ -25,46 +19,46 @@ pub struct ReactorConfig {
     timer_tick_interval_ms: Option<u64>,
 }
 
-#[derive(Debug)]
-/// Error returned by the Reactor.
-pub enum ReactorError<S> {
-    /// An I/O error was returned from the OS.
-    IoError(io::Error, S),
-    /// Could not find associated socket for the token.
-    NoSocketFound(Token),
-    /// An error occurred while adding a timeout.
-    TimerError,
-}
+// #[derive(Debug)]
+// /// Error returned by the Reactor.
+// pub enum ReactorError<S> {
+//     /// An I/O error was returned from the OS.
+//     IoError(io::Error, S),
+//     /// Could not find associated socket for the token.
+//     NoSocketFound(Token),
+//     /// An error occurred while adding a timeout.
+//     TimerError,
+// }
 
-impl<S> Into<io::Error> for ReactorError<S> {
-    fn into(self) -> io::Error {
-        match self {
-            ReactorError::IoError(err, _s) => err,
-            ReactorError::NoSocketFound(_t) => {
-                io::Error::new(ErrorKind::Other, format!("{}", self))
-            },
-            ReactorError::TimerError => {
-                io::Error::new(ErrorKind::Other, format!("{}", self))
-            },
-        }
-    }
-}
+// impl<S> Into<io::Error> for ReactorError<S> {
+//     fn into(self) -> io::Error {
+//         match self {
+//             ReactorError::IoError(err, _s) => err,
+//             ReactorError::NoSocketFound(_t) => {
+//                 io::Error::new(ErrorKind::Other, format!("{}", self))
+//             },
+//             ReactorError::TimerError => {
+//                 io::Error::new(ErrorKind::Other, format!("{}", self))
+//             },
+//         }
+//     }
+// }
 
-impl<S> fmt::Display for ReactorError<S> {
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            ReactorError::IoError(ref e, _) => {
-                write!(fmt, "io error: {}", e)
-            },
-            ReactorError::NoSocketFound(token) => {
-                write!(fmt, "could not find socket with associated token {:?}", token)
-            },
-            ReactorError::TimerError => {
-                write!(fmt, "error when scheduling timeout")
-            },
-        }
-    }
-}
+// impl<S> fmt::Display for ReactorError<S> {
+//     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+//         match *self {
+//             ReactorError::IoError(ref e, _) => {
+//                 write!(fmt, "io error: {}", e)
+//             },
+//             ReactorError::NoSocketFound(token) => {
+//                 write!(fmt, "could not find socket with associated token {:?}", token)
+//             },
+//             ReactorError::TimerError => {
+//                 write!(fmt, "error when scheduling timeout")
+//             },
+//         }
+//     }
+// }
 
 impl ReactorConfig {
     /// Create a new default ReactorConfig.
@@ -107,12 +101,12 @@ impl Default for ReactorConfig {
     }
 }
 
-pub struct ShutdownHandle(Arc<AtomicBool>);
-impl ShutdownHandle {
-    pub fn shutdown(&self) {
-        self.0.store(true, Ordering::SeqCst);
-    }
-}
+// pub struct ShutdownHandle(Arc<AtomicBool>);
+// impl ShutdownHandle {
+//     pub fn shutdown(&self) {
+//         self.0.store(true, Ordering::SeqCst);
+//     }
+// }
 
 impl<P: Protocol> Reactor<P> {
     /// Create a new Reactor with the default options.
@@ -172,9 +166,9 @@ impl<P: Protocol> Reactor<P> {
 #[cfg(test)]
 mod tests {
     use test_helpers::{FakeProtocol, FakeTcpProtocol, FakeSocket};
-    use mio::{EventSet};
-    use mio::unix::{pipe};
-    use mio::tcp::{TcpListener, TcpStream};
+    use rotor::{EventSet};
+    use rotor::unix::{pipe};
+    use rotor::tcp::{TcpListener, TcpStream};
     use std::os::unix::io::{AsRawFd};
     use std::io::{Error, ErrorKind, Write};
     use std::thread;

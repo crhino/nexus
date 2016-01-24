@@ -13,5 +13,10 @@ license = "BSD-3-Clause"
 keywords = ["networking", "tcp", "udp", "async"]
 
 [dependencies]
-mio = "^0.5.0"
 log = "^0.3.4"
+# rotor = "^0.4.0"
+rotor = {git="git://github.com/tailhook/rotor", rev="6ae0b55"}
+void = "0.0.5"
+
+[dev-dependencies]
+ferrous = "0.1.0"
