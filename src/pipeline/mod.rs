@@ -9,7 +9,9 @@ mod context;
 pub use self::context::{Context};
 
 mod chain;
-use self::chain::{Chain};
+
+mod pipeline;
+pub use self::pipeline::{Pipeline};
 
 use std::io;
 use future::NexusFuture;

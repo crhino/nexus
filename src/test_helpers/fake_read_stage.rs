@@ -1,25 +1,30 @@
 use pipeline::{Context, Stage, ReadStage};
 use std::io::{self, Write};
+use std::marker::PhantomData;
+use future::NexusFuture;
 
-#[derive(Debug)]
-pub struct FakeReadStage {
+pub struct FakeReadStage<'a> {
     pub read: Vec<u8>,
     pub connected: bool,
     pub closed: bool,
+    future: Option<NexusFuture<()>>,
+    phantom: PhantomData<&'a [u8]>,
 }
 
-impl FakeReadStage {
-    pub fn new() -> FakeReadStage {
+impl<'a> FakeReadStage<'a> {
+    pub fn new() -> FakeReadStage<'a> {
         FakeReadStage {
             read: Vec::new(),
             connected: false,
             closed: false,
+            future: None,
+            phantom: PhantomData,
         }
     }
 }
 
-impl Stage for FakeReadStage {
-    type Input = u8;
+impl<'a> Stage for FakeReadStage<'a> {
+    type Input = &'a mut [u8];
     type Output = io::Result<()>;
 
     fn connected<C>(&mut self, ctx: &mut C) where C: Context {
@@ -31,8 +36,10 @@ impl Stage for FakeReadStage {
     }
 }
 
-impl ReadStage for FakeReadStage {
+impl<'a> ReadStage for FakeReadStage<'a> {
     fn read<C>(&mut self, ctx: &mut C, input: Self::Input) -> Option<Self::Output> where C: Context {
-        Some(self.read.write_all(&[input]))
+        let future = ctx.write(input);
+        self.future = Some(future);
+        Some(self.read.write_all(input))
     }
 }
