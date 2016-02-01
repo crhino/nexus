@@ -16,18 +16,18 @@ pub use self::pipeline::{Pipeline};
 use std::io;
 use future::NexusFuture;
 
-pub trait Stage {
+pub trait Stage<C: Context> {
     type Input;
     type Output;
 
-    fn connected<C>(&mut self, ctx: &mut C) where C: Context;
-    fn closed<C>(&mut self, ctx: &mut C) where C: Context;
+    fn connected(&mut self, ctx: &mut C);
+    fn closed(&mut self, ctx: &mut C);
 }
 
-pub trait ReadStage: Stage {
-    fn read<C>(&mut self, ctx: &mut C, input: Self::Input) -> Option<Self::Output> where C: Context;
+pub trait ReadStage<C>: Stage<C> {
+    fn read(&mut self, ctx: &mut C, input: Self::Input) -> Option<Self::Output>;
 }
 
-pub trait WriteStage: Stage {
-    fn write<C>(&mut self, ctx: &mut C, input: Self::Input) -> Option<Self::Output> where C: Context;
+pub trait WriteStage<C>: Stage<C> {
+    fn write<C>(&mut self, ctx: &mut C, input: Self::Input) -> Option<Self::Output>;
 }

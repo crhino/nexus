@@ -14,25 +14,25 @@ impl<I> FakePassthroughStage<I> {
     }
 }
 
-impl<I> Stage for FakePassthroughStage<I> {
+impl<C: Context, I> Stage<C> for FakePassthroughStage<I> {
     type Input = I;
     type Output = I;
 
-    fn connected<C>(&mut self, ctx: &mut C) where C: Context {
+    fn connected(&mut self, ctx: &mut C) {
     }
 
-    fn closed<C>(&mut self, ctx: &mut C) where C: Context {
+    fn closed(&mut self, ctx: &mut C) {
     }
 }
 
-impl<I> ReadStage for FakePassthroughStage<I> {
-    fn read<C>(&mut self, ctx: &mut C, input: Self::Input) -> Option<Self::Output> where C: Context {
+impl<C, I> ReadStage<C> for FakePassthroughStage<I> {
+    fn read(&mut self, ctx: &mut C, input: Self::Input) -> Option<Self::Output> {
         Some(input)
     }
 }
 
-impl<I> WriteStage for FakePassthroughStage<I> {
-    fn write<C>(&mut self, ctx: &mut C, input: Self::Input) -> Option<Self::Output> where C: Context {
+impl<C, I> WriteStage<C> for FakePassthroughStage<I> {
+    fn write(&mut self, ctx: &mut C, input: Self::Input) -> Option<Self::Output> {
         Some(input)
     }
 }

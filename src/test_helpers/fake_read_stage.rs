@@ -23,21 +23,22 @@ impl<'a> FakeReadStage<'a> {
     }
 }
 
-impl<'a> Stage for FakeReadStage<'a> {
+impl<'a, C: Context> Stage<C> for FakeReadStage<'a> {
     type Input = &'a mut [u8];
     type Output = io::Result<()>;
 
-    fn connected<C>(&mut self, ctx: &mut C) where C: Context {
+    fn connected(&mut self, ctx: &mut C) {
         self.connected = true;
     }
 
-    fn closed<C>(&mut self, ctx: &mut C) where C: Context {
+    fn closed(&mut self, ctx: &mut C) {
         self.closed = true;
     }
 }
 
-impl<'a> ReadStage for FakeReadStage<'a> {
-    fn read<C>(&mut self, ctx: &mut C, input: Self::Input) -> Option<Self::Output> where C: Context {
+impl<'a, C> ReadStage<C> for FakeReadStage<'a>
+where C: Context<Write=<FakeReadStage<'a> as Stage<C>>::Input> {
+    fn read(&mut self, ctx: &mut C, input: Self::Input) -> Option<Self::Output> {
         let future = ctx.write(input);
         self.future = Some(future);
         Some(self.read.write_all(input))

@@ -19,7 +19,7 @@ impl<S, RStart: Chain, WStart: Chain> Pipeline<S, RStart, WStart> {
     pub fn readable(&mut self) {
     }
 
-    pub fn add_read_stage<R: ReadStage>(self, stage: R)
+    pub fn add_read_stage<C, R: ReadStage<C>>(self, stage: R)
         -> Pipeline<S, Linker<R, RStart>, WStart> {
             match self {
                 Pipeline {
@@ -37,7 +37,7 @@ impl<S, RStart: Chain, WStart: Chain> Pipeline<S, RStart, WStart> {
             }
         }
 
-    pub fn add_write_stage<W: WriteStage>(self, stage: W)
+    pub fn add_write_stage<C, W: WriteStage<C>>(self, stage: W)
         -> Pipeline<S, RStart, Linker<W, WStart>> {
             match self {
                 Pipeline {

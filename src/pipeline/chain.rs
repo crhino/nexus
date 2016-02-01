@@ -54,27 +54,27 @@ impl<S1, S2> Linker<S1, S2> {
     }
 }
 
-impl<S1: Stage, S2> Stage for Linker<S1, S2> {
+impl<C, S1: Stage<C>, S2> Stage<C> for Linker<S1, S2> {
     type Input = S1::Input;
     type Output = S1::Output;
 
-    fn connected<C>(&mut self, ctx: &mut C) where C: Context {
+    fn connected(&mut self, ctx: &mut C) {
         self.stage.connected(ctx)
     }
 
-    fn closed<C>(&mut self, ctx: &mut C) where C: Context {
+    fn closed(&mut self, ctx: &mut C) {
         self.stage.closed(ctx)
     }
 }
 
-impl<S1: WriteStage, S2> WriteStage for Linker<S1, S2> {
-    fn write<C>(&mut self, ctx: &mut C, input: Self::Input) -> Option<Self::Output> where C: Context {
+impl<C, S1: WriteStage<C>, S2> WriteStage<C> for Linker<S1, S2> {
+    fn write(&mut self, ctx: &mut C, input: Self::Input) -> Option<Self::Output> {
         self.stage.write(ctx, input)
     }
 }
 
-impl<S1: ReadStage, S2> ReadStage for Linker<S1, S2> {
-    fn read<C>(&mut self, ctx: &mut C, input: Self::Input) -> Option<Self::Output> where C: Context {
+impl<C, S1: ReadStage<C>, S2> ReadStage<C> for Linker<S1, S2> {
+    fn read(&mut self, ctx: &mut C, input: Self::Input) -> Option<Self::Output> {
         self.stage.read(ctx, input)
     }
 }
@@ -87,10 +87,10 @@ mod tests {
     use test_helpers::{FakeReadStage, FakeWriteStage};
     use std::borrow::Borrow;
 
-    fn impl_write_stage<T: WriteStage, S: Borrow<T>>(_: S) {
+    fn impl_write_stage<C, T: WriteStage<C>, S: Borrow<T>>(_: S) {
     }
 
-    fn impl_read_stage<T: ReadStage, S: Borrow<T>>(_: S) {
+    fn impl_read_stage<C, T: ReadStage<C>, S: Borrow<T>>(_: S) {
     }
 
     #[test]
