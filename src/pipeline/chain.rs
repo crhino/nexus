@@ -79,8 +79,8 @@ impl<S1, S2> Linker<S1, S2> {
 impl<R, W> Stage for End<R, W> {
     type ReadInput = R;
     type ReadOutput = Void;
-    type WriteInput = W;
-    type WriteOutput = Void;
+    type WriteInput = Void;
+    type WriteOutput = W;
 
     fn connected<C>(&mut self, _ctx: &mut C) where C: Context {
         unreachable!()

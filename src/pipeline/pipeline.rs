@@ -19,7 +19,7 @@ impl<Start: Chain + Stage> Pipeline<Start> {
     }
 
     pub fn add_stage<S>(self, stage: S) -> Pipeline<Linker<S, Start>>
-    where S: Stage<ReadOutput=Start::ReadInput, WriteOutput=Start::WriteInput> {
+    where S: Stage<ReadOutput=Start::ReadInput, WriteInput=Start::WriteOutput> {
             match self {
                 Pipeline {
                     list: stages,
@@ -35,7 +35,7 @@ impl<Start: Chain + Stage> Pipeline<Start> {
 
 fn prepend_stage<S, C>(stage: S, chain: Option<C>) -> Linker<S, C>
 where S: Stage,
-C: Chain + Stage<ReadInput=S::ReadOutput, WriteInput=S::WriteOutput>
+C: Chain + Stage<ReadInput=S::ReadOutput, WriteOutput=S::WriteInput>
 {
     match chain {
         Some(c) => {
@@ -55,7 +55,7 @@ mod tests {
     use ferrous::dsl::*;
     use pipeline::{Stage, ReadOnlyStage, WriteOnlyStage, WriteStage, ReadStage};
     use pipeline::chain::End;
-    use test_helpers::{FakeReadStage, FakeReadWriteStage, FakePassthroughStage, FakeWriteStage};
+    use test_helpers::{FakeReadStage, FakeReadWriteStage, FakePassthroughStage, FakeWriteStage, FakeBaseStage};
     use std::io::{self, Write, Read};
 
     #[test]
@@ -66,20 +66,20 @@ mod tests {
 
     #[test]
     fn test_pipeline_add_write_stage() {
-        let pipeline = Pipeline::<End<u8, io::Result<()>>>::new().
+        let pipeline = Pipeline::<End<u8, u8>>::new().
             add_stage(WriteOnlyStage::<u8, _>::new(FakeWriteStage::new()));
     }
 
     #[test]
     fn test_pipeline_read_write_cycle() {
         // 1. Multiple stage pipeline
-        // let (send, recv, stage) = FakeBaseStage::new();
+        let (send, recv, stage) = FakeBaseStage::new();
 
         let mut pipeline = Pipeline::<End<Vec<u8>, &mut [u8]>>::new().
             add_stage(FakePassthroughStage::<Vec<u8>, &mut [u8]>::new()).
             add_stage(FakeReadWriteStage::new()).
-            add_stage(FakePassthroughStage::<&mut [u8], &mut [u8]>::new());
-            // add_stage(stage);
+            add_stage(FakePassthroughStage::<&mut [u8], &mut [u8]>::new()).
+            add_stage(stage);
         // 2. Initiate a read for pipeline
         pipeline.readable();
         // 3. Last read stage should write back
