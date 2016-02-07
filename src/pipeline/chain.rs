@@ -1,4 +1,6 @@
 use pipeline::{Context, Stage, ReadStage, WriteStage};
+use void::Void;
+use std::marker::PhantomData;
 
 pub trait Chain {
     type Next: Chain;
@@ -8,7 +10,27 @@ pub trait Chain {
     fn next_stage_mut(&mut self) -> Option<&mut Self::Next>;
 }
 
+pub struct End<R, W> {
+    read: PhantomData<*const R>,
+    write: PhantomData<*const W>,
+}
+
 impl Chain for () {
+    type Next = ();
+
+    fn add_stage(&mut self, _next: Self::Next) {
+    }
+
+    fn next_stage(&self) -> Option<&Self::Next> {
+        None
+    }
+
+    fn next_stage_mut(&mut self) -> Option<&mut Self::Next> {
+        None
+    }
+}
+
+impl<R, W> Chain for End<R, W> {
     type Next = ();
 
     fn add_stage(&mut self, _next: Self::Next) {
@@ -51,6 +73,29 @@ impl<S1, S2> Linker<S1, S2> {
             stage: stage,
             next: None,
         }
+    }
+}
+
+impl<R, W> Stage for End<R, W> {
+    type ReadInput = R;
+    type ReadOutput = Void;
+    type WriteInput = W;
+    type WriteOutput = Void;
+
+    fn connected<C>(&mut self, _ctx: &mut C) where C: Context {
+        unreachable!()
+    }
+
+    fn closed<C>(&mut self, _ctx: &mut C) where C: Context {
+        unreachable!()
+    }
+
+    fn write<C>(&mut self, _ctx: &mut C, input: Self::WriteInput) -> Option<Self::WriteOutput> where C: Context {
+        unreachable!()
+    }
+
+    fn read<C>(&mut self, _ctx: &mut C, input: Self::ReadInput) -> Option<Self::ReadOutput> where C: Context<Write=Self::WriteOutput> {
+        unreachable!()
     }
 }
 

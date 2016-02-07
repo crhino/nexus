@@ -1,15 +1,13 @@
 use pipeline::chain::{Chain, Linker};
 use pipeline::{Stage};
 
-pub struct Pipeline<S, Start> {
-    socket: S,
+pub struct Pipeline<Start> {
     list: Option<Start>,
 }
 
-impl<S, Start: Chain> Pipeline<S, Start> {
-    pub fn new(socket: S) -> Pipeline<S, Start> {
+impl<Start: Chain + Stage> Pipeline<Start> {
+    pub fn new() -> Pipeline<Start> {
         Pipeline {
-            socket: socket,
             list: None,
         }
     }
@@ -17,16 +15,17 @@ impl<S, Start: Chain> Pipeline<S, Start> {
     pub fn readable(&mut self) {
     }
 
-    pub fn add_stage<St: Stage>(self, stage: St)
-        -> Pipeline<S, Linker<St, Start>> {
+    pub fn writable(&mut self) {
+    }
+
+    pub fn add_stage<S>(self, stage: S) -> Pipeline<Linker<S, Start>>
+    where S: Stage<ReadOutput=Start::ReadInput, WriteOutput=Start::WriteInput> {
             match self {
                 Pipeline {
-                    socket: s,
                     list: stages,
                 } => {
-                    let stages = append_stage(stages, stage);
+                    let stages = prepend_stage(stage, stages);
                     Pipeline {
-                        socket: s,
                         list: Some(stages),
                     }
                 }
@@ -34,7 +33,10 @@ impl<S, Start: Chain> Pipeline<S, Start> {
         }
 }
 
-fn append_stage<S, C1: Chain>(chain: Option<C1>, stage: S) -> Linker<S, C1> {
+fn prepend_stage<S, C>(stage: S, chain: Option<C>) -> Linker<S, C>
+where S: Stage,
+C: Chain + Stage<ReadInput=S::ReadOutput, WriteInput=S::WriteOutput>
+{
     match chain {
         Some(c) => {
             let mut linker = Linker::new(stage);
@@ -52,39 +54,37 @@ mod tests {
     use super::*;
     use ferrous::dsl::*;
     use pipeline::{Stage, ReadOnlyStage, WriteOnlyStage, WriteStage, ReadStage};
+    use pipeline::chain::End;
     use test_helpers::{FakeReadStage, FakeReadWriteStage, FakePassthroughStage, FakeWriteStage};
-    use rotor::mio::unix::{pipe};
-    use std::io::{Write, Read};
+    use std::io::{self, Write, Read};
 
     #[test]
     fn test_pipeline_add_read_stage() {
-        let (mut r, mut w) = pipe().unwrap();
-        let pipeline = Pipeline::<_, ()>::new(r).
-            add_stage(ReadOnlyStage::<_, u8>::new(FakeReadStage::new())).
+        let pipeline = Pipeline::<End<io::Result<()>, u8>>::new().
             add_stage(ReadOnlyStage::<_, u8>::new(FakeReadStage::new()));
     }
 
     #[test]
     fn test_pipeline_add_write_stage() {
-        let (mut r, mut w) = pipe().unwrap();
-        let pipeline = Pipeline::<_, ()>::new(r).
-            add_stage(WriteOnlyStage::<u8, _>::new(FakeWriteStage::new())).
+        let pipeline = Pipeline::<End<u8, io::Result<()>>>::new().
             add_stage(WriteOnlyStage::<u8, _>::new(FakeWriteStage::new()));
     }
 
     #[test]
     fn test_pipeline_read_write_cycle() {
         // 1. Multiple stage pipeline
-        let (mut r, mut w) = pipe().unwrap();
-        let mut pipeline = Pipeline::<_, ()>::new(r).
-            add_stage(WriteOnlyStage::<u8, _>::new(FakeWriteStage::new())).
-            add_stage(FakePassthroughStage::<u8, u8>::new()).
+        // let (send, recv, stage) = FakeBaseStage::new();
+
+        let mut pipeline = Pipeline::<End<Vec<u8>, &mut [u8]>>::new().
+            add_stage(FakePassthroughStage::<Vec<u8>, &mut [u8]>::new()).
             add_stage(FakeReadWriteStage::new()).
-            add_stage(FakePassthroughStage::<u8, u8>::new());
+            add_stage(FakePassthroughStage::<&mut [u8], &mut [u8]>::new());
+            // add_stage(stage);
         // 2. Initiate a read for pipeline
         pipeline.readable();
         // 3. Last read stage should write back
         // 4. Trigger pipeline write
+        pipeline.writable();
         // 5. Assert that write was received
         assert!(false);
     }

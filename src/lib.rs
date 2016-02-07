@@ -5,6 +5,7 @@
 //! A high performance networking library
 
 extern crate rotor;
+extern crate void;
 #[macro_use] extern crate log;
 
 #[cfg(test)] extern crate ferrous;
