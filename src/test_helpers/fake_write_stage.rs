@@ -18,21 +18,19 @@ impl FakeWriteStage {
     }
 }
 
-impl<C> Stage<C> for FakeWriteStage {
+impl WriteStage for FakeWriteStage {
     type Input = u8;
     type Output = io::Result<()>;
 
-    fn connected(&mut self, ctx: &mut C) {
+    fn connected<C>(&mut self, ctx: &mut C) where C: Context {
         self.connected = true;
     }
 
-    fn closed(&mut self, ctx: &mut C) {
+    fn closed<C>(&mut self, ctx: &mut C) where C: Context {
         self.closed = true;
     }
-}
 
-impl<C> WriteStage<C> for FakeWriteStage {
-    fn write(&mut self, ctx: &mut C, input: Self::Input) -> Option<Self::Output> {
+    fn write<C>(&mut self, ctx: &mut C, input: Self::Input) -> Option<Self::Output> where C: Context {
         Some(self.written.write_all(&[input]))
     }
 }

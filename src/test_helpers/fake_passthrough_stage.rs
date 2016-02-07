@@ -2,37 +2,37 @@ use pipeline::{Context, Stage, WriteStage, ReadStage};
 use std::marker::PhantomData;
 
 #[derive(Debug)]
-pub struct FakePassthroughStage<I> {
-    input: PhantomData<*const I>,
+pub struct FakePassthroughStage<R, W> {
+    r: PhantomData<*const R>,
+    w: PhantomData<*const W>,
 }
 
-impl<I> FakePassthroughStage<I> {
-    pub fn new() -> FakePassthroughStage<I> {
+impl<R, W> FakePassthroughStage<R, W> {
+    pub fn new() -> FakePassthroughStage<R, W> {
         FakePassthroughStage {
-            input: PhantomData,
+            r: PhantomData,
+            w: PhantomData,
         }
     }
 }
 
-impl<C: Context, I> Stage<C> for FakePassthroughStage<I> {
-    type Input = I;
-    type Output = I;
+impl<R, W> Stage for FakePassthroughStage<R, W> {
+    type ReadInput = R;
+    type ReadOutput = R;
+    type WriteInput = W;
+    type WriteOutput = W;
 
-    fn connected(&mut self, ctx: &mut C) {
+    fn connected<C>(&mut self, ctx: &mut C) where C: Context {
     }
 
-    fn closed(&mut self, ctx: &mut C) {
+    fn closed<C>(&mut self, ctx: &mut C) where C: Context {
     }
-}
 
-impl<C, I> ReadStage<C> for FakePassthroughStage<I> {
-    fn read(&mut self, ctx: &mut C, input: Self::Input) -> Option<Self::Output> {
+    fn read<C>(&mut self, ctx: &mut C, input: Self::ReadInput) -> Option<Self::ReadOutput> where C: Context {
         Some(input)
     }
-}
 
-impl<C, I> WriteStage<C> for FakePassthroughStage<I> {
-    fn write(&mut self, ctx: &mut C, input: Self::Input) -> Option<Self::Output> {
+    fn write<C>(&mut self, ctx: &mut C, input: Self::WriteInput) -> Option<Self::WriteOutput> where C: Context {
         Some(input)
     }
 }

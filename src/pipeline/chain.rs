@@ -54,27 +54,25 @@ impl<S1, S2> Linker<S1, S2> {
     }
 }
 
-impl<C, S1: Stage<C>, S2> Stage<C> for Linker<S1, S2> {
-    type Input = S1::Input;
-    type Output = S1::Output;
+impl<S1: Stage, S2> Stage for Linker<S1, S2> {
+    type ReadInput = S1::ReadInput;
+    type ReadOutput = S1::ReadOutput;
+    type WriteInput = S1::WriteInput;
+    type WriteOutput = S1::WriteOutput;
 
-    fn connected(&mut self, ctx: &mut C) {
+    fn connected<C>(&mut self, ctx: &mut C) where C: Context {
         self.stage.connected(ctx)
     }
 
-    fn closed(&mut self, ctx: &mut C) {
+    fn closed<C>(&mut self, ctx: &mut C) where C: Context {
         self.stage.closed(ctx)
     }
-}
 
-impl<C, S1: WriteStage<C>, S2> WriteStage<C> for Linker<S1, S2> {
-    fn write(&mut self, ctx: &mut C, input: Self::Input) -> Option<Self::Output> {
+    fn write<C>(&mut self, ctx: &mut C, input: Self::WriteInput) -> Option<Self::WriteOutput> where C: Context {
         self.stage.write(ctx, input)
     }
-}
 
-impl<C, S1: ReadStage<C>, S2> ReadStage<C> for Linker<S1, S2> {
-    fn read(&mut self, ctx: &mut C, input: Self::Input) -> Option<Self::Output> {
+    fn read<C>(&mut self, ctx: &mut C, input: Self::ReadInput) -> Option<Self::ReadOutput> where C: Context<Write=Self::WriteOutput> {
         self.stage.read(ctx, input)
     }
 }
@@ -83,14 +81,11 @@ impl<C, S1: ReadStage<C>, S2> ReadStage<C> for Linker<S1, S2> {
 mod tests {
     use super::*;
     use ferrous::dsl::*;
-    use pipeline::{WriteStage, ReadStage};
-    use test_helpers::{FakeReadStage, FakeWriteStage};
+    use pipeline::{Stage, WriteOnlyStage};
+    use test_helpers::{FakeWriteStage};
     use std::borrow::Borrow;
 
-    fn impl_write_stage<C, T: WriteStage<C>, S: Borrow<T>>(_: S) {
-    }
-
-    fn impl_read_stage<C, T: ReadStage<C>, S: Borrow<T>>(_: S) {
+    fn impl_stage<T: Stage, S: Borrow<T>>(_: S) {
     }
 
     #[test]
@@ -118,26 +113,16 @@ mod tests {
         expect(&next_stage).to(be_some());
 
         let stage = next_stage.unwrap();
-        impl_write_stage::<Linker<FakeWriteStage, _>, _>(stage);
     }
 
     #[test]
-    fn test_impl_write_stage() {
-        let stage = FakeWriteStage::new();
+    fn test_impl_stage() {
+        let stage = WriteOnlyStage::<u8, _>::new(FakeWriteStage::new());
         let mut linker = Linker::new(stage);
 
-        let next: Linker<_, ()> = Linker::new(FakeWriteStage::new());
+        let new_stage = WriteOnlyStage::<u8, _>::new(FakeWriteStage::new());
+        let next: Linker<_, ()> = Linker::new(new_stage);
         linker.add_stage(next);
-        impl_write_stage(linker);
-    }
-
-    #[test]
-    fn test_impl_read_stage() {
-        let stage = FakeReadStage::new();
-        let mut linker = Linker::new(stage);
-
-        let next: Linker<_, ()> = Linker::new(FakeReadStage::new());
-        linker.add_stage(next);
-        impl_read_stage(linker);
+        impl_stage(linker);
     }
 }
