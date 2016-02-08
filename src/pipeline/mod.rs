@@ -17,25 +17,32 @@ use std::io;
 use std::marker::PhantomData;
 use future::NexusFuture;
 
-pub trait Stage<'a> {
+pub trait Stage<'a, S> {
     type ReadInput;
     type ReadOutput;
     type WriteInput;
     type WriteOutput;
 
-    fn connected<C>(&mut self, ctx: &mut C) where C: Context;
-    fn closed<C>(&mut self, ctx: &mut C) where C: Context;
-    fn read<C>(&'a mut self, ctx: &mut C, input: Self::ReadInput) -> Option<Self::ReadOutput> where C: Context<Write=Self::WriteOutput>;
-    fn write<C>(&'a mut self, ctx: &mut C, input: Self::WriteInput) -> Option<Self::WriteOutput> where C: Context;
+    fn connected<C>(&mut self, ctx: &mut C)
+        where C: Context<Socket=S, Write=Self::WriteOutput>;
+    fn closed<C>(&mut self, ctx: &mut C)
+        where C: Context<Socket=S>;
+    fn read<C>(&'a mut self, ctx: &mut C, input: Self::ReadInput) -> Option<Self::ReadOutput>
+            where C: Context<Socket=S, Write=Self::WriteOutput>;
+    fn write<C>(&'a mut self, ctx: &mut C, input: Self::WriteInput) -> Option<Self::WriteOutput>
+            where C: Context<Socket=S>;
 }
 
 pub trait ReadStage<'a> {
     type Input;
     type Output;
 
-    fn connected<C>(&mut self, ctx: &mut C) where C: Context;
-    fn closed<C>(&mut self, ctx: &mut C) where C: Context;
-    fn read<C>(&'a mut self, ctx: &mut C, input: Self::Input) -> Option<Self::Output> where C: Context;
+    fn connected<C>(&mut self, ctx: &mut C)
+        where C: Context<Socket=S, Write=Self::WriteOutput>;
+    fn closed<C>(&mut self, ctx: &mut C)
+        where C: Context<Socket=S>;
+    fn read<C>(&'a mut self, ctx: &mut C, input: Self::ReadInput) -> Option<Self::ReadOutput>
+            where C: Context<Socket=S, Write=Self::WriteOutput>;
 }
 
 pub struct ReadOnlyStage<R, W> {
@@ -79,9 +86,12 @@ pub trait WriteStage<'a> {
     type Input;
     type Output;
 
-    fn connected<C>(&mut self, ctx: &mut C) where C: Context;
-    fn closed<C>(&mut self, ctx: &mut C) where C: Context;
-    fn write<C>(&'a mut self, ctx: &mut C, input: Self::Input) -> Option<Self::Output> where C: Context;
+    fn connected<C>(&mut self, ctx: &mut C)
+        where C: Context<Socket=S, Write=Self::WriteOutput>;
+    fn closed<C>(&mut self, ctx: &mut C)
+        where C: Context<Socket=S>;
+    fn write<C>(&'a mut self, ctx: &mut C, input: Self::WriteInput) -> Option<Self::WriteOutput>
+            where C: Context<Socket=S>;
 }
 
 pub struct WriteOnlyStage<R, W> {
