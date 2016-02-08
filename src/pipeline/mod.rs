@@ -17,7 +17,7 @@ use std::io;
 use std::marker::PhantomData;
 use future::NexusFuture;
 
-pub trait Stage {
+pub trait Stage<'a> {
     type ReadInput;
     type ReadOutput;
     type WriteInput;
@@ -25,17 +25,17 @@ pub trait Stage {
 
     fn connected<C>(&mut self, ctx: &mut C) where C: Context;
     fn closed<C>(&mut self, ctx: &mut C) where C: Context;
-    fn read<C>(&mut self, ctx: &mut C, input: Self::ReadInput) -> Option<Self::ReadOutput> where C: Context<Write=Self::WriteOutput>;
-    fn write<C>(&mut self, ctx: &mut C, input: Self::WriteInput) -> Option<Self::WriteOutput> where C: Context;
+    fn read<C>(&'a mut self, ctx: &mut C, input: Self::ReadInput) -> Option<Self::ReadOutput> where C: Context<Write=Self::WriteOutput>;
+    fn write<C>(&'a mut self, ctx: &mut C, input: Self::WriteInput) -> Option<Self::WriteOutput> where C: Context;
 }
 
-pub trait ReadStage {
+pub trait ReadStage<'a> {
     type Input;
     type Output;
 
     fn connected<C>(&mut self, ctx: &mut C) where C: Context;
     fn closed<C>(&mut self, ctx: &mut C) where C: Context;
-    fn read<C>(&mut self, ctx: &mut C, input: Self::Input) -> Option<Self::Output> where C: Context;
+    fn read<C>(&'a mut self, ctx: &mut C, input: Self::Input) -> Option<Self::Output> where C: Context;
 }
 
 pub struct ReadOnlyStage<R, W> {
@@ -43,7 +43,7 @@ pub struct ReadOnlyStage<R, W> {
     write: PhantomData<* const W>,
 }
 
-impl<R: ReadStage, W> ReadOnlyStage<R, W> {
+impl<R, W> ReadOnlyStage<R, W> {
     pub fn new(read_stage: R) -> ReadOnlyStage<R, W> {
         ReadOnlyStage {
             read_stage: read_stage,
@@ -52,7 +52,7 @@ impl<R: ReadStage, W> ReadOnlyStage<R, W> {
     }
 }
 
-impl<R: ReadStage, W> Stage for ReadOnlyStage<R, W> {
+impl<'a, R: ReadStage<'a>, W> Stage<'a> for ReadOnlyStage<R, W> {
     type ReadInput = R::Input;
     type ReadOutput = R::Output;
     type WriteInput = W;
@@ -66,7 +66,7 @@ impl<R: ReadStage, W> Stage for ReadOnlyStage<R, W> {
         self.read_stage.closed(ctx)
     }
 
-    fn read<C>(&mut self, ctx: &mut C, input: Self::ReadInput) -> Option<Self::ReadOutput> where C: Context<Write=Self::WriteOutput> {
+    fn read<C>(&'a mut self, ctx: &mut C, input: Self::ReadInput) -> Option<Self::ReadOutput> where C: Context<Write=Self::WriteOutput> {
         self.read_stage.read(ctx, input)
     }
 
@@ -75,13 +75,13 @@ impl<R: ReadStage, W> Stage for ReadOnlyStage<R, W> {
     }
 }
 
-pub trait WriteStage {
+pub trait WriteStage<'a> {
     type Input;
     type Output;
 
     fn connected<C>(&mut self, ctx: &mut C) where C: Context;
     fn closed<C>(&mut self, ctx: &mut C) where C: Context;
-    fn write<C>(&mut self, ctx: &mut C, input: Self::Input) -> Option<Self::Output> where C: Context;
+    fn write<C>(&'a mut self, ctx: &mut C, input: Self::Input) -> Option<Self::Output> where C: Context;
 }
 
 pub struct WriteOnlyStage<R, W> {
@@ -89,7 +89,7 @@ pub struct WriteOnlyStage<R, W> {
     read: PhantomData<* const R>,
 }
 
-impl<R, W: WriteStage> WriteOnlyStage<R, W> {
+impl<R, W> WriteOnlyStage<R, W> {
     pub fn new(write_stage: W) -> WriteOnlyStage<R, W> {
         WriteOnlyStage {
             write_stage: write_stage,
@@ -98,7 +98,7 @@ impl<R, W: WriteStage> WriteOnlyStage<R, W> {
     }
 }
 
-impl<R, W: WriteStage> Stage for WriteOnlyStage<R, W> {
+impl<'a, R, W: WriteStage<'a>> Stage<'a> for WriteOnlyStage<R, W> {
     type ReadInput = R;
     type ReadOutput = R;
     type WriteInput = W::Input;
@@ -112,11 +112,11 @@ impl<R, W: WriteStage> Stage for WriteOnlyStage<R, W> {
         self.write_stage.closed(ctx)
     }
 
-    fn read<C>(&mut self, ctx: &mut C, input: Self::ReadInput) -> Option<Self::ReadOutput> where C: Context<Write=Self::WriteOutput> {
+    fn read<C>(&'a mut self, ctx: &mut C, input: Self::ReadInput) -> Option<Self::ReadOutput> where C: Context<Write=Self::WriteOutput> {
         Some(input)
     }
 
-    fn write<C>(&mut self, ctx: &mut C, input: Self::WriteInput) -> Option<Self::WriteOutput> where C: Context {
+    fn write<C>(&'a mut self, ctx: &mut C, input: Self::WriteInput) -> Option<Self::WriteOutput> where C: Context {
         self.write_stage.write(ctx, input)
     }
 }

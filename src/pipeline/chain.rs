@@ -76,7 +76,7 @@ impl<S1, S2> Linker<S1, S2> {
     }
 }
 
-impl<R, W> Stage for End<R, W> {
+impl<'a, R: 'a, W: 'a> Stage<'a> for End<R, W> {
     type ReadInput = R;
     type ReadOutput = Void;
     type WriteInput = Void;
@@ -99,7 +99,7 @@ impl<R, W> Stage for End<R, W> {
     }
 }
 
-impl<S1: Stage, S2> Stage for Linker<S1, S2> {
+impl<'a, S1: Stage<'a>, S2> Stage<'a> for Linker<S1, S2> {
     type ReadInput = S1::ReadInput;
     type ReadOutput = S1::ReadOutput;
     type WriteInput = S1::WriteInput;
@@ -113,11 +113,11 @@ impl<S1: Stage, S2> Stage for Linker<S1, S2> {
         self.stage.closed(ctx)
     }
 
-    fn write<C>(&mut self, ctx: &mut C, input: Self::WriteInput) -> Option<Self::WriteOutput> where C: Context {
+    fn write<C>(&'a mut self, ctx: &mut C, input: Self::WriteInput) -> Option<Self::WriteOutput> where C: Context {
         self.stage.write(ctx, input)
     }
 
-    fn read<C>(&mut self, ctx: &mut C, input: Self::ReadInput) -> Option<Self::ReadOutput> where C: Context<Write=Self::WriteOutput> {
+    fn read<C>(&'a mut self, ctx: &mut C, input: Self::ReadInput) -> Option<Self::ReadOutput> where C: Context<Write=Self::WriteOutput> {
         self.stage.read(ctx, input)
     }
 }
@@ -130,7 +130,7 @@ mod tests {
     use test_helpers::{FakeWriteStage};
     use std::borrow::Borrow;
 
-    fn impl_stage<T: Stage, S: Borrow<T>>(_: S) {
+    fn impl_stage<'a, T: Stage<'a>, S: Borrow<T>>(_: S) {
     }
 
     #[test]

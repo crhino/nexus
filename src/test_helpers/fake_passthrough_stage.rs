@@ -16,7 +16,7 @@ impl<R, W> FakePassthroughStage<R, W> {
     }
 }
 
-impl<R, W> Stage for FakePassthroughStage<R, W> {
+impl<'a, R: 'a, W: 'a> Stage<'a> for FakePassthroughStage<R, W> {
     type ReadInput = R;
     type ReadOutput = R;
     type WriteInput = W;

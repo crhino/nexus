@@ -1,14 +1,17 @@
 use pipeline::chain::{Chain, Linker};
 use pipeline::{Stage};
+use std::marker::PhantomData;
 
-pub struct Pipeline<Start> {
+pub struct Pipeline<'a, Start: 'a> {
     list: Option<Start>,
+    phantom: PhantomData<&'a Start>,
 }
 
-impl<Start: Chain + Stage> Pipeline<Start> {
-    pub fn new() -> Pipeline<Start> {
+impl<'a, Start: Chain + Stage<'a>> Pipeline<'a, Start> {
+    pub fn new() -> Pipeline<'a, Start> {
         Pipeline {
             list: None,
+            phantom: PhantomData, // Needed for the 'a lifetime parameter on Pipeline to constrain Stage<'a> impl
         }
     }
 
@@ -18,24 +21,26 @@ impl<Start: Chain + Stage> Pipeline<Start> {
     pub fn writable(&mut self) {
     }
 
-    pub fn add_stage<S>(self, stage: S) -> Pipeline<Linker<S, Start>>
-    where S: Stage<ReadOutput=Start::ReadInput, WriteInput=Start::WriteOutput> {
+    pub fn add_stage<S>(self, stage: S) -> Pipeline<'a, Linker<S, Start>>
+    where S: Stage<'a, ReadOutput=Start::ReadInput, WriteInput=Start::WriteOutput> {
             match self {
                 Pipeline {
                     list: stages,
+                    phantom: phantom,
                 } => {
                     let stages = prepend_stage(stage, stages);
                     Pipeline {
                         list: Some(stages),
+                        phantom: PhantomData,
                     }
                 }
             }
         }
 }
 
-fn prepend_stage<S, C>(stage: S, chain: Option<C>) -> Linker<S, C>
-where S: Stage,
-C: Chain + Stage<ReadInput=S::ReadOutput, WriteOutput=S::WriteInput>
+fn prepend_stage<'a, S, C>(stage: S, chain: Option<C>) -> Linker<S, C>
+where S: Stage<'a>,
+C: Chain + Stage<'a, ReadInput=S::ReadOutput, WriteOutput=S::WriteInput>
 {
     match chain {
         Some(c) => {
@@ -75,10 +80,10 @@ mod tests {
         // 1. Multiple stage pipeline
         let (send, recv, stage) = FakeBaseStage::new();
 
-        let mut pipeline = Pipeline::<End<Vec<u8>, &mut [u8]>>::new().
-            add_stage(FakePassthroughStage::<Vec<u8>, &mut [u8]>::new()).
+        let mut pipeline = Pipeline::<End<Vec<u8>, &[u8]>>::new().
+            add_stage(FakePassthroughStage::<Vec<u8>, &[u8]>::new()).
             add_stage(FakeReadWriteStage::new()).
-            add_stage(FakePassthroughStage::<&mut [u8], &mut [u8]>::new()).
+            add_stage(FakePassthroughStage::<&[u8], &[u8]>::new()).
             add_stage(stage);
         // 2. Initiate a read for pipeline
         pipeline.readable();

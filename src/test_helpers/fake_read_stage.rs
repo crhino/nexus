@@ -3,27 +3,25 @@ use std::io::{self, Write};
 use std::marker::PhantomData;
 use future::NexusFuture;
 
-pub struct FakeReadStage<'a> {
+pub struct FakeReadStage {
     pub read: Vec<u8>,
     pub connected: bool,
     pub closed: bool,
     future: Option<NexusFuture<()>>,
-    phantom: PhantomData<&'a [u8]>,
 }
 
-impl<'a> FakeReadStage<'a> {
-    pub fn new() -> FakeReadStage<'a> {
+impl FakeReadStage {
+    pub fn new() -> FakeReadStage {
         FakeReadStage {
             read: Vec::new(),
             connected: false,
             closed: false,
             future: None,
-            phantom: PhantomData,
         }
     }
 }
 
-impl<'a> ReadStage for FakeReadStage<'a> {
+impl<'a> ReadStage<'a> for FakeReadStage {
     type Input = &'a mut [u8];
     type Output = io::Result<()>;
 
