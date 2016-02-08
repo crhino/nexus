@@ -25,10 +25,10 @@ impl FakeBaseStage {
 }
 
 impl<'a> Stage<'a> for FakeBaseStage {
-    type ReadInput = Void;
+    type ReadInput = ();
     type ReadOutput = &'a [u8];
     type WriteInput = &'a [u8];
-    type WriteOutput = Void;
+    type WriteOutput = ();
 
     fn connected<C>(&mut self, ctx: &mut C) where C: Context {
     }

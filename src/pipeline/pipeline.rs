@@ -38,6 +38,10 @@ impl<'a, Start: Chain + Stage<'a>> Pipeline<'a, Start> {
         }
 }
 
+fn recursive_read_write_loop<'a, R, W, C>(chain: C, input: R) -> Option<W>
+where C: Chain + Stage<'a> {
+}
+
 fn prepend_stage<'a, S, C>(stage: S, chain: Option<C>) -> Linker<S, C>
 where S: Stage<'a>,
 C: Chain + Stage<'a, ReadInput=S::ReadOutput, WriteOutput=S::WriteInput>
@@ -79,6 +83,8 @@ mod tests {
     fn test_pipeline_read_write_cycle() {
         // 1. Multiple stage pipeline
         let (send, recv, stage) = FakeBaseStage::new();
+        let read = vec!(1,2,3,4,5);
+        send.send(read.clone()).unwrap();
 
         let mut pipeline = Pipeline::<End<Vec<u8>, &[u8]>>::new().
             add_stage(FakePassthroughStage::<Vec<u8>, &[u8]>::new()).
@@ -91,6 +97,8 @@ mod tests {
         // 4. Trigger pipeline write
         pipeline.writable();
         // 5. Assert that write was received
-        assert!(false);
+        let written = recv.try_recv().unwrap();
+
+        expect(&written).to(equal(&read));
     }
 }
