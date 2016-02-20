@@ -76,7 +76,7 @@ impl<S1, S2> Linker<S1, S2> {
     }
 }
 
-impl<'a, R: 'a, W: 'a> Stage<'a> for End<R, W> {
+impl<'a, S, R: 'a, W: 'a> Stage<'a, S> for End<R, W> {
     type ReadInput = R;
     type ReadOutput = Void;
     type WriteInput = Void;
@@ -99,25 +99,31 @@ impl<'a, R: 'a, W: 'a> Stage<'a> for End<R, W> {
     }
 }
 
-impl<'a, S1: Stage<'a>, S2> Stage<'a> for Linker<S1, S2> {
+impl<'a, S, S1: Stage<'a, S>, S2> Stage<'a, S> for Linker<S1, S2> {
     type ReadInput = S1::ReadInput;
     type ReadOutput = S1::ReadOutput;
     type WriteInput = S1::WriteInput;
     type WriteOutput = S1::WriteOutput;
 
-    fn connected<C>(&mut self, ctx: &mut C) where C: Context {
+    fn connected<C>(&mut self, ctx: &mut C)
+        where C: Context<Socket=S, Write=Self::WriteOutput> {
         self.stage.connected(ctx)
     }
 
-    fn closed<C>(&mut self, ctx: &mut C) where C: Context {
+    fn closed<C>(&mut self, ctx: &mut C)
+        where C: Context<Socket=S> {
         self.stage.closed(ctx)
     }
 
-    fn write<C>(&'a mut self, ctx: &mut C, input: Self::WriteInput) -> Option<Self::WriteOutput> where C: Context {
+    fn write<C>(&'a mut self, ctx: &mut C, input: Self::WriteInput)
+        -> Option<Self::WriteOutput>
+            where C: Context<Socket=S> {
         self.stage.write(ctx, input)
     }
 
-    fn read<C>(&'a mut self, ctx: &mut C, input: Self::ReadInput) -> Option<Self::ReadOutput> where C: Context<Write=Self::WriteOutput> {
+    fn read<C>(&'a mut self, ctx: &mut C, input: Self::ReadInput)
+        -> Option<Self::ReadOutput>
+            where C: Context<Socket=S, Write=Self::WriteOutput> {
         self.stage.read(ctx, input)
     }
 }
@@ -130,7 +136,8 @@ mod tests {
     use test_helpers::{FakeWriteStage};
     use std::borrow::Borrow;
 
-    fn impl_stage<'a, T: Stage<'a>, S: Borrow<T>>(_: S) {
+    struct Stub;
+    fn impl_stage<'a, T: Stage<'a, Stub>, S: Borrow<T>>(_: S) {
     }
 
     #[test]

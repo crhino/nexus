@@ -24,7 +24,7 @@ impl FakeBaseStage {
     }
 }
 
-impl<'a> Stage<'a> for FakeBaseStage {
+impl<'a, S> Stage<'a, S> for FakeBaseStage {
     type ReadInput = ();
     type ReadOutput = &'a [u8];
     type WriteInput = &'a [u8];
@@ -36,12 +36,16 @@ impl<'a> Stage<'a> for FakeBaseStage {
     fn closed<C>(&mut self, ctx: &mut C) where C: Context {
     }
 
-    fn read<C>(&'a mut self, ctx: &mut C, input: Self::ReadInput) -> Option<Self::ReadOutput> where C: Context<Write=Self::WriteOutput> {
+    fn read<C>(&'a mut self, ctx: &mut C, input: Self::ReadInput)
+        -> Option<Self::ReadOutput>
+            where C: Context<Socket=S, Write=Self::WriteOutput> {
         self.vec = self.input.recv().unwrap();
         Some(&mut self.vec[..])
     }
 
-    fn write<C>(&mut self, ctx: &mut C, input: Self::WriteInput) -> Option<Self::WriteOutput> where C: Context {
+    fn write<C>(&mut self, ctx: &mut C, input: Self::WriteInput)
+        -> Option<Self::WriteOutput>
+            where C: Context<Socket=S> {
         let vec = input.to_vec();
         self.output.send(vec).unwrap();
         None

@@ -16,7 +16,7 @@ impl<R, W> FakePassthroughStage<R, W> {
     }
 }
 
-impl<'a, R: 'a, W: 'a> Stage<'a> for FakePassthroughStage<R, W> {
+impl<'a, S, R: 'a, W: 'a> Stage<'a, S> for FakePassthroughStage<R, W> {
     type ReadInput = R;
     type ReadOutput = R;
     type WriteInput = W;
@@ -28,11 +28,15 @@ impl<'a, R: 'a, W: 'a> Stage<'a> for FakePassthroughStage<R, W> {
     fn closed<C>(&mut self, ctx: &mut C) where C: Context {
     }
 
-    fn read<C>(&mut self, ctx: &mut C, input: Self::ReadInput) -> Option<Self::ReadOutput> where C: Context {
+    fn read<C>(&'a mut self, ctx: &mut C, input: Self::ReadInput)
+        -> Option<Self::ReadOutput>
+            where C: Context<Socket=S, Write=Self::WriteOutput> {
         Some(input)
     }
 
-    fn write<C>(&mut self, ctx: &mut C, input: Self::WriteInput) -> Option<Self::WriteOutput> where C: Context {
+    fn write<C>(&mut self, ctx: &mut C, input: Self::WriteInput)
+        -> Option<Self::WriteOutput>
+            where C: Context<Socket=S> {
         Some(input)
     }
 }

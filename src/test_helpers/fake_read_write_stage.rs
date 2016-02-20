@@ -23,7 +23,7 @@ impl FakeReadWriteStage {
     }
 }
 
-impl<'a> Stage<'a> for FakeReadWriteStage {
+impl<'a, S> Stage<'a, S> for FakeReadWriteStage {
     type ReadInput = &'a [u8];
     type ReadOutput = Vec<u8>;
     type WriteInput = &'a [u8];
@@ -37,14 +37,18 @@ impl<'a> Stage<'a> for FakeReadWriteStage {
         self.closed = true;
     }
 
-    fn read<C>(&mut self, ctx: &mut C, input: Self::ReadInput) -> Option<Self::ReadOutput> where C: Context<Write=Self::WriteOutput> {
+    fn read<C>(&'a mut self, ctx: &mut C, input: Self::ReadInput)
+        -> Option<Self::ReadOutput>
+            where C: Context<Socket=S, Write=Self::WriteOutput> {
         let out = input.to_vec();
         let future = ctx.write(input);
         self.future = Some(future);
         Some(out)
     }
 
-    fn write<C>(&mut self, ctx: &mut C, input: Self::WriteInput) -> Option<Self::WriteOutput> where C: Context {
+    fn write<C>(&mut self, ctx: &mut C, input: Self::WriteInput)
+        -> Option<Self::WriteOutput>
+            where C: Context<Socket=S> {
         self.write.write_all(input);
         Some(input)
     }

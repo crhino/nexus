@@ -18,7 +18,7 @@ impl FakeWriteStage {
     }
 }
 
-impl<'a> WriteStage<'a> for FakeWriteStage {
+impl<'a, S> WriteStage<'a, S> for FakeWriteStage {
     type Input = u8;
     type Output = io::Result<()>;
 
@@ -30,7 +30,9 @@ impl<'a> WriteStage<'a> for FakeWriteStage {
         self.closed = true;
     }
 
-    fn write<C>(&mut self, ctx: &mut C, input: Self::Input) -> Option<Self::Output> where C: Context {
+    fn write<C>(&mut self, ctx: &mut C, input: Self::Input)
+        -> Option<Self::Output>
+            where C: Context<Socket=S> {
         Some(self.written.write_all(&[input]))
     }
 }
