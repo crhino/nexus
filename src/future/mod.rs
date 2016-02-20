@@ -1,9 +1,17 @@
 use std::io;
 use std::sync::{Arc, Mutex, Condvar};
+use std::fmt;
 
 struct Inner<T> {
     data: Mutex<Option<io::Result<T>>>,
     cond: Condvar,
+}
+
+impl<T: fmt::Debug> fmt::Debug for Inner<T> {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        fmt.debug_struct("Inner")
+            .finish()
+    }
 }
 
 impl<T> Inner<T> {
@@ -36,6 +44,7 @@ impl<T> Inner<T> {
     }
 }
 
+#[derive(Debug)]
 pub struct NexusFuture<T> {
     inner: Arc<Inner<T>>,
 }

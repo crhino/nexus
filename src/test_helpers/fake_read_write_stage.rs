@@ -3,6 +3,7 @@ use std::io::{self, Write};
 use std::marker::PhantomData;
 use future::NexusFuture;
 
+#[derive(Debug)]
 pub struct FakeReadWriteStage {
     pub read: Vec<u8>,
     pub write: Vec<u8>,

@@ -1,5 +1,6 @@
 use pipeline::chain::{Chain, Linker};
 use pipeline::{Stage};
+use pipeline::context::PipelineContext;
 use std::marker::PhantomData;
 
 pub struct Pipeline<'a, S, Start: 'a> {
@@ -8,7 +9,7 @@ pub struct Pipeline<'a, S, Start: 'a> {
     phantom: PhantomData<&'a Start>,
 }
 
-impl<'a, S, Start: Chain + Stage<'a, S>> Pipeline<'a, S, Start> {
+impl<'a, S, Start: Chain<'a, S> + Stage<'a, S>> Pipeline<'a, S, Start> {
     pub fn new(socket: S) -> Pipeline<'a, S, Start> {
         Pipeline {
             list: None,
@@ -20,6 +21,8 @@ impl<'a, S, Start: Chain + Stage<'a, S>> Pipeline<'a, S, Start> {
     pub fn readable(&mut self) {
     }
 
+    // Writable will only call the first stage, since that is the only one that should be writing
+    // to the socket.
     pub fn writable(&mut self) {
     }
 
@@ -42,14 +45,25 @@ impl<'a, S, Start: Chain + Stage<'a, S>> Pipeline<'a, S, Start> {
         }
 }
 
-fn recursive_read_write_loop<'a, S, R, W, C>(chain: C, input: R) -> Option<W>
-where C: Chain + Stage<'a, S> {
-    None
-}
+// fn read_and_write_stages<'a, S, R, W, N, C>(chain: &mut C, input: R, socket: &mut S)
+// where C: Chain<'a, S> + Stage<'a, S, ReadInput=R> {
+//     let read_out = {
+//         let ctx = PipelineContext::new(socket);
+//         chain.read(&mut ctx, input)
+//     };
+
+//     // Recurse until stage doesn't return Some(read_val)
+//     read_out.and_then(|read_val| {
+//         if let Some(c) = chain.next_stage_mut() {
+//             read_and_write_stages(c, read_val, socket);
+//         }
+//         None
+//     });
+// }
 
 fn prepend_stage<'a, S, St, C>(stage: St, chain: Option<C>) -> Linker<St, C>
 where St: Stage<'a, S>,
-C: Chain + Stage<'a, S, ReadInput=St::ReadOutput, WriteOutput=St::WriteInput>
+C: Chain<'a, S> + Stage<'a, S, ReadInput=St::ReadOutput, WriteOutput=St::WriteInput>
 {
     match chain {
         Some(c) => {

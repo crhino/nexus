@@ -2,8 +2,8 @@ use pipeline::{Context, Stage, ReadStage, WriteStage};
 use void::Void;
 use std::marker::PhantomData;
 
-pub trait Chain {
-    type Next: Chain;
+pub trait Chain<'a, S> {
+    type Next: Chain<'a, S> + Stage<'a, S>;
 
     fn add_stage(&mut self, next: Self::Next);
     fn next_stage(&self) -> Option<&Self::Next>;
@@ -15,7 +15,7 @@ pub struct End<R, W> {
     write: PhantomData<*const W>,
 }
 
-impl Chain for () {
+impl<'a, S> Chain<'a, S> for () {
     type Next = ();
 
     fn add_stage(&mut self, _next: Self::Next) {
@@ -30,7 +30,7 @@ impl Chain for () {
     }
 }
 
-impl<R, W> Chain for End<R, W> {
+impl<'a, S, R, W> Chain<'a, S> for End<R, W> {
     type Next = ();
 
     fn add_stage(&mut self, _next: Self::Next) {
@@ -45,7 +45,7 @@ impl<R, W> Chain for End<R, W> {
     }
 }
 
-impl<S1, S2: Chain> Chain for Linker<S1, S2> {
+impl<'a, S, S1, S2: Stage<'a, S> + Chain<'a, S>> Chain<'a, S> for Linker<S1, S2> {
     type Next = S2;
 
     fn add_stage(&mut self, next: Self::Next) {
@@ -73,6 +73,29 @@ impl<S1, S2> Linker<S1, S2> {
             stage: stage,
             next: None,
         }
+    }
+}
+
+impl<'a, S> Stage<'a, S> for () {
+    type ReadInput = Void;
+    type ReadOutput = Void;
+    type WriteInput = Void;
+    type WriteOutput = Void;
+
+    fn connected<C>(&mut self, _ctx: &mut C) where C: Context {
+        unreachable!()
+    }
+
+    fn closed<C>(&mut self, _ctx: &mut C) where C: Context {
+        unreachable!()
+    }
+
+    fn write<C>(&mut self, _ctx: &mut C, input: Self::WriteInput) -> Option<Self::WriteOutput> where C: Context {
+        unreachable!()
+    }
+
+    fn read<C>(&mut self, _ctx: &mut C, input: Self::ReadInput) -> Option<Self::ReadOutput> where C: Context<Write=Self::WriteOutput> {
+        unreachable!()
     }
 }
 
@@ -133,7 +156,7 @@ mod tests {
     use super::*;
     use ferrous::dsl::*;
     use pipeline::{Stage, WriteOnlyStage};
-    use test_helpers::{FakeWriteStage};
+    use test_helpers::{FakeReadWriteStage, FakeWriteStage};
     use std::borrow::Borrow;
 
     struct Stub;
@@ -142,26 +165,26 @@ mod tests {
 
     #[test]
     fn test_next_stage() {
-        let stage = FakeWriteStage::new();
+        let stage = FakeReadWriteStage::new();
         let mut linker = Linker::new(stage);
 
-        let next: Linker<_, ()> = Linker::new(FakeWriteStage::new());
-        linker.add_stage(next);
-        let next_stage = linker.next_stage();
+        let next: Linker<_, ()> = Linker::new(FakeReadWriteStage::new());
+        Chain::<Stub>::add_stage(&mut linker, next);
+        let next_stage = Chain::<Stub>::next_stage(&linker);
         expect(&next_stage).to(be_some());
 
-        let last = next_stage.unwrap().next_stage();
+        let last = Chain::<Stub>::next_stage(next_stage.unwrap());
         expect(&last).to(be_none());
     }
 
     #[test]
     fn test_next_stage_mut() {
-        let stage = FakeWriteStage::new();
+        let stage = FakeReadWriteStage::new();
         let mut linker = Linker::new(stage);
 
-        let next: Linker<_, ()> = Linker::new(FakeWriteStage::new());
-        linker.add_stage(next);
-        let next_stage = linker.next_stage_mut();
+        let next: Linker<_, ()> = Linker::new(FakeReadWriteStage::new());
+        Chain::<Stub>::add_stage(&mut linker, next);
+        let next_stage = Chain::<Stub>::next_stage(&linker);
         expect(&next_stage).to(be_some());
 
         let stage = next_stage.unwrap();
@@ -174,7 +197,7 @@ mod tests {
 
         let new_stage = WriteOnlyStage::<u8, _>::new(FakeWriteStage::new());
         let next: Linker<_, ()> = Linker::new(new_stage);
-        linker.add_stage(next);
+        Chain::<Stub>::add_stage(&mut linker, next);
         impl_stage(linker);
     }
 }
