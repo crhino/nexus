@@ -19,6 +19,8 @@ impl<'a, S, Start: Chain<'a, S> + Stage<'a, S>> Pipeline<'a, S, Start> {
     }
 
     pub fn readable(&mut self) {
+        let list = &mut self.list;
+        let socket = &mut self.socket;
     }
 
     // Writable will only call the first stage, since that is the only one that should be writing
@@ -45,21 +47,40 @@ impl<'a, S, Start: Chain<'a, S> + Stage<'a, S>> Pipeline<'a, S, Start> {
         }
 }
 
-// fn read_and_write_stages<'a, S, R, W, N, C>(chain: &mut C, input: R, socket: &mut S)
-// where C: Chain<'a, S> + Stage<'a, S, ReadInput=R> {
-//     let read_out = {
-//         let ctx = PipelineContext::new(socket);
+// fn read_stage_and_return_next<'a, C, R, S, S2>(chain: &'a mut C, input: R, socket: &mut S)
+//     -> Option<S2::ReadInput>
+//         where C: Chain<'a, S, Next=S2, ReadInput=R>,
+//               S2: Chain<'a, S, ReadInput=C::ReadOutput> {
+//         let mut ctx = PipelineContext::new(socket);
 //         chain.read(&mut ctx, input)
-//     };
-
-//     // Recurse until stage doesn't return Some(read_val)
-//     read_out.and_then(|read_val| {
-//         if let Some(c) = chain.next_stage_mut() {
-//             read_and_write_stages(c, read_val, socket);
-//         }
-//         None
-//     });
 // }
+
+// fn read_write_stages<'a, C, R, S: 'a, S2: 'a>(chain: &'a mut C, input: R, socket: &mut S)
+//     where C: Chain<'a, S, Next=S2, ReadInput=R>,
+//           S2: Chain<'a, S, ReadInput=C::ReadOutput, WriteOutput=C::WriteInput> {
+//               let output = { read_stage_and_return_next::<C, R, S, S2>(chain, input, socket) };
+//               if let Some(read_val) = output {
+//                   if let Some(c) = chain.next_stage_mut() {
+//                       read_write_stages(c, read_val, socket);
+//                   }
+//               }
+// }
+
+fn read_and_write_stages<'a, S: 'a, R, S2: 'a, C>(chain: &mut C, input: R, socket: &mut S)
+    where C: Chain<'a, S, Next=S2, ReadInput=R>,
+          S2: Chain<'a, S, ReadInput=C::ReadOutput, WriteOutput=C::WriteInput> {
+    let read_out: Option<S2::ReadInput> = {
+        let mut ctx = PipelineContext::new(socket);
+        chain.read(&mut ctx, input)
+    };
+
+    // Recurse until stage doesn't return Some(read_val)
+    if let Some(read_val) = read_out {
+        if let Some(c) = chain.next_stage_mut() {
+            read_and_write_stages(c, read_val, socket);
+        }
+    }
+}
 
 fn prepend_stage<'a, S, St, C>(stage: St, chain: Option<C>) -> Linker<St, C>
 where St: Stage<'a, S>,

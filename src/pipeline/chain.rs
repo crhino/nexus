@@ -2,14 +2,15 @@ use pipeline::{Context, Stage, ReadStage, WriteStage};
 use void::Void;
 use std::marker::PhantomData;
 
-pub trait Chain<'a, S> {
-    type Next: Chain<'a, S> + Stage<'a, S>;
+pub trait Chain<'a, S>: Stage<'a, S> {
+    type Next: Chain<'a, S> + Stage<'a, S, ReadInput=Self::ReadOutput, WriteOutput=Self::WriteInput>;
 
     fn add_stage(&mut self, next: Self::Next);
     fn next_stage(&self) -> Option<&Self::Next>;
     fn next_stage_mut(&mut self) -> Option<&mut Self::Next>;
 }
 
+#[derive(Debug)]
 pub struct End<R, W> {
     read: PhantomData<*const R>,
     write: PhantomData<*const W>,
@@ -30,7 +31,7 @@ impl<'a, S> Chain<'a, S> for () {
     }
 }
 
-impl<'a, S, R, W> Chain<'a, S> for End<R, W> {
+impl<'a, S, R: 'a, W: 'a> Chain<'a, S> for End<R, W> {
     type Next = ();
 
     fn add_stage(&mut self, _next: Self::Next) {
@@ -45,7 +46,9 @@ impl<'a, S, R, W> Chain<'a, S> for End<R, W> {
     }
 }
 
-impl<'a, S, S1, S2: Stage<'a, S> + Chain<'a, S>> Chain<'a, S> for Linker<S1, S2> {
+impl<'a, S, S1, S2> Chain<'a, S> for Linker<S1, S2>
+where S1: Stage<'a, S>,
+      S2: Stage<'a, S, ReadInput=S1::ReadOutput, WriteOutput=S1::WriteInput> + Chain<'a, S> {
     type Next = S2;
 
     fn add_stage(&mut self, next: Self::Next) {
@@ -156,8 +159,9 @@ mod tests {
     use super::*;
     use ferrous::dsl::*;
     use pipeline::{Stage, WriteOnlyStage};
-    use test_helpers::{FakeReadWriteStage, FakeWriteStage};
+    use test_helpers::{FakePassthroughStage, FakeReadWriteStage, FakeWriteStage};
     use std::borrow::Borrow;
+    use std::io;
 
     struct Stub;
     fn impl_stage<'a, T: Stage<'a, Stub>, S: Borrow<T>>(_: S) {
@@ -165,10 +169,10 @@ mod tests {
 
     #[test]
     fn test_next_stage() {
-        let stage = FakeReadWriteStage::new();
+        let stage = FakePassthroughStage::new();
         let mut linker = Linker::new(stage);
 
-        let next: Linker<_, ()> = Linker::new(FakeReadWriteStage::new());
+        let next: Linker<_, End<Vec<u8>, &[u8]>> = Linker::new(FakeReadWriteStage::new());
         Chain::<Stub>::add_stage(&mut linker, next);
         let next_stage = Chain::<Stub>::next_stage(&linker);
         expect(&next_stage).to(be_some());
@@ -179,10 +183,10 @@ mod tests {
 
     #[test]
     fn test_next_stage_mut() {
-        let stage = FakeReadWriteStage::new();
+        let stage = FakePassthroughStage::new();
         let mut linker = Linker::new(stage);
 
-        let next: Linker<_, ()> = Linker::new(FakeReadWriteStage::new());
+        let next: Linker<_, End<Vec<u8>, &[u8]>> = Linker::new(FakeReadWriteStage::new());
         Chain::<Stub>::add_stage(&mut linker, next);
         let next_stage = Chain::<Stub>::next_stage(&linker);
         expect(&next_stage).to(be_some());
@@ -192,11 +196,11 @@ mod tests {
 
     #[test]
     fn test_impl_stage() {
-        let stage = WriteOnlyStage::<u8, _>::new(FakeWriteStage::new());
+        let stage = FakePassthroughStage::new();
         let mut linker = Linker::new(stage);
 
         let new_stage = WriteOnlyStage::<u8, _>::new(FakeWriteStage::new());
-        let next: Linker<_, ()> = Linker::new(new_stage);
+        let next: Linker<_, End<u8, u8>> = Linker::new(new_stage);
         Chain::<Stub>::add_stage(&mut linker, next);
         impl_stage(linker);
     }
