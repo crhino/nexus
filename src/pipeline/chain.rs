@@ -2,8 +2,8 @@ use pipeline::{Context, Stage, ReadStage, WriteStage};
 use void::Void;
 use std::marker::PhantomData;
 
-pub trait Chain<'a, S>: Stage<'a, S> {
-    type Next: Chain<'a, S> + Stage<'a, S, ReadInput=Self::ReadOutput, WriteOutput=Self::WriteInput>;
+pub trait Chain<S>: Stage<S> {
+    type Next: Chain<S> + Stage<S, ReadInput=Self::ReadOutput, WriteOutput=Self::WriteInput>;
 
     fn add_stage(&mut self, next: Self::Next);
     fn next_stage(&self) -> Option<&Self::Next>;
@@ -16,7 +16,7 @@ pub struct End<R, W> {
     write: PhantomData<*const W>,
 }
 
-impl<'a, S> Chain<'a, S> for () {
+impl<S> Chain<S> for () {
     type Next = ();
 
     fn add_stage(&mut self, _next: Self::Next) {
@@ -31,7 +31,7 @@ impl<'a, S> Chain<'a, S> for () {
     }
 }
 
-impl<'a, S, R: 'a, W: 'a> Chain<'a, S> for End<R, W> {
+impl<S, R, W> Chain<S> for End<R, W> {
     type Next = ();
 
     fn add_stage(&mut self, _next: Self::Next) {
@@ -46,9 +46,9 @@ impl<'a, S, R: 'a, W: 'a> Chain<'a, S> for End<R, W> {
     }
 }
 
-impl<'a, S, S1, S2> Chain<'a, S> for Linker<S1, S2>
-where S1: Stage<'a, S>,
-      S2: Stage<'a, S, ReadInput=S1::ReadOutput, WriteOutput=S1::WriteInput> + Chain<'a, S> {
+impl<S, S1, S2> Chain<S> for Linker<S1, S2>
+where S1: Stage<S>,
+      S2: Stage<S, ReadInput=S1::ReadOutput, WriteOutput=S1::WriteInput> + Chain<S> {
     type Next = S2;
 
     fn add_stage(&mut self, next: Self::Next) {
@@ -79,7 +79,7 @@ impl<S1, S2> Linker<S1, S2> {
     }
 }
 
-impl<'a, S> Stage<'a, S> for () {
+impl<S> Stage<S> for () {
     type ReadInput = Void;
     type ReadOutput = Void;
     type WriteInput = Void;
@@ -102,7 +102,7 @@ impl<'a, S> Stage<'a, S> for () {
     }
 }
 
-impl<'a, S, R: 'a, W: 'a> Stage<'a, S> for End<R, W> {
+impl<S, R, W> Stage<S> for End<R, W> {
     type ReadInput = R;
     type ReadOutput = Void;
     type WriteInput = Void;
@@ -125,7 +125,7 @@ impl<'a, S, R: 'a, W: 'a> Stage<'a, S> for End<R, W> {
     }
 }
 
-impl<'a, S, S1: Stage<'a, S>, S2> Stage<'a, S> for Linker<S1, S2> {
+impl<S, S1: Stage<S>, S2> Stage<S> for Linker<S1, S2> {
     type ReadInput = S1::ReadInput;
     type ReadOutput = S1::ReadOutput;
     type WriteInput = S1::WriteInput;
@@ -141,13 +141,13 @@ impl<'a, S, S1: Stage<'a, S>, S2> Stage<'a, S> for Linker<S1, S2> {
         self.stage.closed(ctx)
     }
 
-    fn write<C>(&'a mut self, ctx: &mut C, input: Self::WriteInput)
+    fn write<C>(&mut self, ctx: &mut C, input: Self::WriteInput)
         -> Option<Self::WriteOutput>
             where C: Context<Socket=S> {
         self.stage.write(ctx, input)
     }
 
-    fn read<C>(&'a mut self, ctx: &mut C, input: Self::ReadInput)
+    fn read<C>(&mut self, ctx: &mut C, input: Self::ReadInput)
         -> Option<Self::ReadOutput>
             where C: Context<Socket=S, Write=Self::WriteOutput> {
         self.stage.read(ctx, input)
@@ -164,7 +164,7 @@ mod tests {
     use std::io;
 
     struct Stub;
-    fn impl_stage<'a, T: Stage<'a, Stub>, S: Borrow<T>>(_: S) {
+    fn impl_stage<T: Stage<Stub>, S: Borrow<T>>(_: S) {
     }
 
     #[test]
@@ -172,7 +172,7 @@ mod tests {
         let stage = FakePassthroughStage::new();
         let mut linker = Linker::new(stage);
 
-        let next: Linker<_, End<Vec<u8>, &[u8]>> = Linker::new(FakeReadWriteStage::new());
+        let next: Linker<_, End<Vec<u8>, Vec<u8>>> = Linker::new(FakeReadWriteStage::new());
         Chain::<Stub>::add_stage(&mut linker, next);
         let next_stage = Chain::<Stub>::next_stage(&linker);
         expect(&next_stage).to(be_some());
@@ -186,7 +186,7 @@ mod tests {
         let stage = FakePassthroughStage::new();
         let mut linker = Linker::new(stage);
 
-        let next: Linker<_, End<Vec<u8>, &[u8]>> = Linker::new(FakeReadWriteStage::new());
+        let next: Linker<_, End<Vec<u8>, Vec<u8>>> = Linker::new(FakeReadWriteStage::new());
         Chain::<Stub>::add_stage(&mut linker, next);
         let next_stage = Chain::<Stub>::next_stage(&linker);
         expect(&next_stage).to(be_some());

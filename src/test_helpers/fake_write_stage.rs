@@ -18,7 +18,7 @@ impl FakeWriteStage {
     }
 }
 
-impl<'a, S> WriteStage<'a, S> for FakeWriteStage {
+impl<S> WriteStage<S> for FakeWriteStage {
     type Input = u8;
     type Output = io::Result<()>;
 

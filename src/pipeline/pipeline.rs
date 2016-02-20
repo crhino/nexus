@@ -3,18 +3,16 @@ use pipeline::{Stage};
 use pipeline::context::PipelineContext;
 use std::marker::PhantomData;
 
-pub struct Pipeline<'a, S, Start: 'a> {
+pub struct Pipeline<S, Start> {
     list: Option<Start>,
     socket: S,
-    phantom: PhantomData<&'a Start>,
 }
 
-impl<'a, S, Start: Chain<'a, S> + Stage<'a, S>> Pipeline<'a, S, Start> {
-    pub fn new(socket: S) -> Pipeline<'a, S, Start> {
+impl<S, Start: Chain<S> + Stage<S>> Pipeline<S, Start> {
+    pub fn new(socket: S) -> Pipeline<S, Start> {
         Pipeline {
             list: None,
             socket: socket,
-            phantom: PhantomData, // Needed for the 'a lifetime parameter on Pipeline to constrain Stage<'a> impl
         }
     }
 
@@ -28,19 +26,17 @@ impl<'a, S, Start: Chain<'a, S> + Stage<'a, S>> Pipeline<'a, S, Start> {
     pub fn writable(&mut self) {
     }
 
-    pub fn add_stage<St>(self, stage: St) -> Pipeline<'a, S, Linker<St, Start>>
-    where St: Stage<'a, S, ReadOutput=Start::ReadInput, WriteInput=Start::WriteOutput> {
+    pub fn add_stage<St>(self, stage: St) -> Pipeline<S, Linker<St, Start>>
+    where St: Stage<S, ReadOutput=Start::ReadInput, WriteInput=Start::WriteOutput> {
             match self {
                 Pipeline {
                     list: stages,
                     socket: s,
-                    phantom: phantom,
                 } => {
                     let stages = prepend_stage(stage, stages);
                     Pipeline {
                         list: Some(stages),
                         socket: s,
-                        phantom: PhantomData,
                     }
                 }
             }
@@ -66,9 +62,9 @@ impl<'a, S, Start: Chain<'a, S> + Stage<'a, S>> Pipeline<'a, S, Start> {
 //               }
 // }
 
-fn read_and_write_stages<'a, S: 'a, R, S2: 'a, C>(chain: &mut C, input: R, socket: &mut S)
-    where C: Chain<'a, S, Next=S2, ReadInput=R>,
-          S2: Chain<'a, S, ReadInput=C::ReadOutput, WriteOutput=C::WriteInput> {
+fn read_and_write_stages<S, R, S2, C>(chain: &mut C, input: R, socket: &mut S)
+    where C: Chain<S, Next=S2, ReadInput=R>,
+          S2: Chain<S, ReadInput=C::ReadOutput, WriteOutput=C::WriteInput> {
     let read_out: Option<S2::ReadInput> = {
         let mut ctx = PipelineContext::new(socket);
         chain.read(&mut ctx, input)
@@ -82,9 +78,9 @@ fn read_and_write_stages<'a, S: 'a, R, S2: 'a, C>(chain: &mut C, input: R, socke
     }
 }
 
-fn prepend_stage<'a, S, St, C>(stage: St, chain: Option<C>) -> Linker<St, C>
-where St: Stage<'a, S>,
-C: Chain<'a, S> + Stage<'a, S, ReadInput=St::ReadOutput, WriteOutput=St::WriteInput>
+fn prepend_stage<S, St, C>(stage: St, chain: Option<C>) -> Linker<St, C>
+where St: Stage<S>,
+C: Chain<S> + Stage<S, ReadInput=St::ReadOutput, WriteOutput=St::WriteInput>
 {
     match chain {
         Some(c) => {
@@ -128,10 +124,10 @@ mod tests {
         let read = vec!(1,2,3,4,5);
         send.send(read.clone()).unwrap();
 
-        let mut pipeline = Pipeline::<_, End<Vec<u8>, &[u8]>>::new(Stub).
-            add_stage(FakePassthroughStage::<Vec<u8>, &[u8]>::new()).
+        let mut pipeline = Pipeline::<_, End<Vec<u8>, Vec<u8>>>::new(Stub).
+            add_stage(FakePassthroughStage::<Vec<u8>, Vec<u8>>::new()).
             add_stage(FakeReadWriteStage::new()).
-            add_stage(FakePassthroughStage::<&[u8], &[u8]>::new()).
+            add_stage(FakePassthroughStage::<Vec<u8>, Vec<u8>>::new()).
             add_stage(stage);
         // 2. Initiate a read for pipeline
         pipeline.readable();

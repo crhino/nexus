@@ -17,7 +17,7 @@ use std::io;
 use std::marker::PhantomData;
 use future::NexusFuture;
 
-pub trait Stage<'a, S> {
+pub trait Stage<S> {
     type ReadInput;
     type ReadOutput;
     type WriteInput;
@@ -27,13 +27,13 @@ pub trait Stage<'a, S> {
         where C: Context<Socket=S, Write=Self::WriteOutput>;
     fn closed<C>(&mut self, ctx: &mut C)
         where C: Context<Socket=S>;
-    fn read<C>(&'a mut self, ctx: &mut C, input: Self::ReadInput) -> Option<Self::ReadOutput>
+    fn read<C>(&mut self, ctx: &mut C, input: Self::ReadInput) -> Option<Self::ReadOutput>
             where C: Context<Socket=S, Write=Self::WriteOutput>;
-    fn write<C>(&'a mut self, ctx: &mut C, input: Self::WriteInput) -> Option<Self::WriteOutput>
+    fn write<C>(&mut self, ctx: &mut C, input: Self::WriteInput) -> Option<Self::WriteOutput>
             where C: Context<Socket=S>;
 }
 
-pub trait ReadStage<'a, S> {
+pub trait ReadStage<S> {
     type Input;
     type Output;
 
@@ -41,7 +41,7 @@ pub trait ReadStage<'a, S> {
         where C: Context<Socket=S>;
     fn closed<C>(&mut self, ctx: &mut C)
         where C: Context<Socket=S>;
-    fn read<C>(&'a mut self, ctx: &mut C, input: Self::Input) -> Option<Self::Output>
+    fn read<C>(&mut self, ctx: &mut C, input: Self::Input) -> Option<Self::Output>
             where C: Context<Socket=S>;
 }
 
@@ -59,7 +59,7 @@ impl<R, W> ReadOnlyStage<R, W> {
     }
 }
 
-impl<'a, R: ReadStage<'a, S>, S, W> Stage<'a, S> for ReadOnlyStage<R, W> {
+impl<R: ReadStage<S>, S, W> Stage<S> for ReadOnlyStage<R, W> {
     type ReadInput = R::Input;
     type ReadOutput = R::Output;
     type WriteInput = W;
@@ -75,7 +75,7 @@ impl<'a, R: ReadStage<'a, S>, S, W> Stage<'a, S> for ReadOnlyStage<R, W> {
         self.read_stage.closed(ctx)
     }
 
-    fn read<C>(&'a mut self, ctx: &mut C, input: Self::ReadInput)
+    fn read<C>(&mut self, ctx: &mut C, input: Self::ReadInput)
         -> Option<Self::ReadOutput>
             where C: Context<Socket=S, Write=Self::WriteOutput> {
         self.read_stage.read(ctx, input)
@@ -88,7 +88,7 @@ impl<'a, R: ReadStage<'a, S>, S, W> Stage<'a, S> for ReadOnlyStage<R, W> {
     }
 }
 
-pub trait WriteStage<'a, S> {
+pub trait WriteStage<S> {
     type Input;
     type Output;
 
@@ -96,7 +96,7 @@ pub trait WriteStage<'a, S> {
         where C: Context<Socket=S, Write=Self::Output>;
     fn closed<C>(&mut self, ctx: &mut C)
         where C: Context<Socket=S>;
-    fn write<C>(&'a mut self, ctx: &mut C, input: Self::Input) -> Option<Self::Output>
+    fn write<C>(&mut self, ctx: &mut C, input: Self::Input) -> Option<Self::Output>
             where C: Context<Socket=S>;
 }
 
@@ -114,7 +114,7 @@ impl<R, W> WriteOnlyStage<R, W> {
     }
 }
 
-impl<'a, S, R, W: WriteStage<'a, S>> Stage<'a, S> for WriteOnlyStage<R, W> {
+impl<S, R, W: WriteStage<S>> Stage<S> for WriteOnlyStage<R, W> {
     type ReadInput = R;
     type ReadOutput = R;
     type WriteInput = W::Input;
@@ -130,13 +130,13 @@ impl<'a, S, R, W: WriteStage<'a, S>> Stage<'a, S> for WriteOnlyStage<R, W> {
         self.write_stage.closed(ctx)
     }
 
-    fn read<C>(&'a mut self, ctx: &mut C, input: Self::ReadInput)
+    fn read<C>(&mut self, ctx: &mut C, input: Self::ReadInput)
         -> Option<Self::ReadOutput>
             where C: Context<Socket=S, Write=Self::WriteOutput> {
         Some(input)
     }
 
-    fn write<C>(&'a mut self, ctx: &mut C, input: Self::WriteInput)
+    fn write<C>(&mut self, ctx: &mut C, input: Self::WriteInput)
         -> Option<Self::WriteOutput>
             where C: Context<Socket=S> {
         self.write_stage.write(ctx, input)

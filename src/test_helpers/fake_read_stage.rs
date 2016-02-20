@@ -21,8 +21,8 @@ impl FakeReadStage {
     }
 }
 
-impl<'a, S> ReadStage<'a, S> for FakeReadStage {
-    type Input = &'a mut [u8];
+impl<S> ReadStage<S> for FakeReadStage {
+    type Input = Vec<u8>;
     type Output = io::Result<()>;
 
     fn connected<C>(&mut self, ctx: &mut C) where C: Context {
@@ -33,11 +33,11 @@ impl<'a, S> ReadStage<'a, S> for FakeReadStage {
         self.closed = true;
     }
 
-    fn read<C>(&'a mut self, ctx: &mut C, input: Self::Input)
+    fn read<C>(&mut self, ctx: &mut C, input: Self::Input)
         -> Option<Self::Output>
             where C: Context<Socket=S> {
         // let future = ctx.write(input);
         // self.future = Some(future);
-        Some(self.read.write_all(input))
+        Some(self.read.write_all(&input[..]))
     }
 }
