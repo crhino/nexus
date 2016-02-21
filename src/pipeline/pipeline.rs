@@ -102,6 +102,7 @@ mod tests {
     use pipeline::chain::End;
     use test_helpers::{FakeReadStage, FakeReadWriteStage, FakePassthroughStage, FakeWriteStage, FakeBaseStage};
     use std::io::{self, Write, Read};
+    use std::sync::{Arc, Mutex};
 
     struct Stub;
 
@@ -124,8 +125,10 @@ mod tests {
         let read = vec!(1,2,3,4,5);
         send.send(read.clone()).unwrap();
 
+        let last_stage = Arc::new(Mutex::new(FakeReadWriteStage::new()));
+
         let mut pipeline = Pipeline::<_, End<Vec<u8>, Vec<u8>>>::new(Stub).
-            add_stage(FakeReadWriteStage::new()).
+            add_stage(last_stage.clone()).
             add_stage(FakePassthroughStage::<Vec<u8>, Vec<u8>>::new()).
             add_stage(stage);
         // 2. Initiate a read for pipeline
@@ -137,5 +140,6 @@ mod tests {
         let written = recv.try_recv().unwrap();
 
         expect(&written).to(equal(&read));
+        expect(&last_stage.lock().unwrap().get_future()).to(be_ok());
     }
 }
