@@ -41,7 +41,7 @@ impl<S> Stage<S> for FakeReadWriteStage {
     fn read<C>(&mut self, ctx: &mut C, input: Self::ReadInput)
         -> Option<Self::ReadOutput>
             where C: Context<Socket=S, Write=Self::WriteOutput> {
-        let future = ctx.write(input.clone());
+        let future = ctx.write(input.clone()).unwrap();
         self.future = Some(future);
         Some(input)
     }

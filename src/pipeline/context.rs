@@ -1,26 +1,31 @@
-use future::Future;
-use std::marker::PhantomData;
+use future::{Future, Promise, pair};
 
 pub trait Context {
     type Socket;
     type Write;
 
     fn socket(&mut self) -> &mut Self::Socket;
-    fn write(&mut self, obj: Self::Write) -> Future<()>;
+    /// The write method can only be called once per stage. The object will be returned if
+    /// the object was not scheduled to be written.
+    fn write(&mut self, obj: Self::Write) -> Result<Future<()>, Self::Write>;
     fn close(&mut self);
 }
 
 pub struct PipelineContext<'a, S: 'a, W> {
     socket: &'a mut S,
-    write: PhantomData<*const W>,
+    to_write: Option<(W, Promise<()>)>,
 }
 
 impl<'a, S: 'a, W> PipelineContext<'a, S, W> {
     pub fn new(socket: &'a mut S) -> PipelineContext<'a, S, W> {
         PipelineContext {
             socket: socket,
-            write: PhantomData,
+            to_write: None,
         }
+    }
+
+    pub fn into(self) -> Option<(W, Promise<()>)> {
+        self.to_write
     }
 }
 
@@ -32,8 +37,14 @@ impl<'a, S: 'a, W> Context for PipelineContext<'a, S, W> {
         self.socket
     }
 
-    fn write(&mut self, obj: Self::Write) -> Future<()> {
-        unimplemented!()
+    fn write(&mut self, obj: Self::Write) -> Result<Future<()>, Self::Write> {
+        if self.to_write.is_some() {
+            return Err(obj)
+        }
+
+        let (promise, future) = pair();
+        self.to_write = Some((obj, promise));
+        Ok(future)
     }
 
     fn close(&mut self) {

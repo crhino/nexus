@@ -47,6 +47,7 @@ impl<S> Stage<S> for FakeBaseStage {
         -> Option<(Self::WriteOutput, Promise<()>)>
             where C: Context<Socket=S> {
         self.output.send(input).unwrap();
+        promise.set(Ok(()));
         None
     }
 }

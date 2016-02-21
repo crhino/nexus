@@ -27,6 +27,7 @@ pub trait Stage<S> {
         where C: Context<Socket=S, Write=Self::WriteOutput>;
     fn closed<C>(&mut self, ctx: &mut C)
         where C: Context<Socket=S>;
+    // If the read method initiates a write command, any output is silently discarded.
     fn read<C>(&mut self, ctx: &mut C, input: Self::ReadInput) -> Option<Self::ReadOutput>
             where C: Context<Socket=S, Write=Self::WriteOutput>;
     fn write<C>(&mut self, ctx: &mut C, input: Self::WriteInput, promise: Promise<()>)

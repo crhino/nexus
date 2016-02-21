@@ -1,7 +1,8 @@
 use pipeline::chain::{Chain, Linker};
 use pipeline::{Stage};
 use pipeline::context::PipelineContext;
-use std::marker::PhantomData;
+use future::{Promise};
+use void::Void;
 
 pub struct Pipeline<S, Start> {
     list: Option<Start>,
@@ -14,16 +15,6 @@ impl<S, Start: Chain<S> + Stage<S>> Pipeline<S, Start> {
             list: None,
             socket: socket,
         }
-    }
-
-    pub fn readable(&mut self) {
-        let list = &mut self.list;
-        let socket = &mut self.socket;
-    }
-
-    // Writable will only call the first stage, since that is the only one that should be writing
-    // to the socket.
-    pub fn writable(&mut self) {
     }
 
     pub fn add_stage<St>(self, stage: St) -> Pipeline<S, Linker<St, Start>>
@@ -43,20 +34,48 @@ impl<S, Start: Chain<S> + Stage<S>> Pipeline<S, Start> {
         }
 }
 
+impl<S, Start: Chain<S, ReadInput=()>> Pipeline<S, Start> {
+    pub fn readable(&mut self) {
+        let list = &mut self.list;
+        let socket = &mut self.socket;
+
+        list.as_mut().and_then(|chain| {
+            read_and_write_stages(chain, (), socket)
+        });
+    }
+
+    // Writable will only call the first stage, since that is the only one that should be writing
+    // to the socket.
+    pub fn writable(&mut self) {
+    }
+}
+
 fn read_and_write_stages<S, R, S2, C>(chain: &mut C, input: R, socket: &mut S)
+-> Option<(C::WriteOutput, Promise<()>)>
     where C: Chain<S, Next=S2, ReadInput=R>,
           S2: Chain<S, ReadInput=C::ReadOutput, WriteOutput=C::WriteInput> {
-    let read_out: Option<S2::ReadInput> = {
+    let (read_out, to_write) = {
         let mut ctx = PipelineContext::new(socket);
-        chain.read(&mut ctx, input)
+        let read = chain.read(&mut ctx, input);
+        (read, ctx.into())
     };
 
-    // Recurse until stage doesn't return Some(read_val) or there are no more stages
-    if let Some(read_val) = read_out {
-        if let Some(c) = chain.next_stage_mut() {
-            read_and_write_stages(c, read_val, socket);
-        }
+    // Return early if read stage wants to write, this silently discards read_out var
+    // TODO: Is there are better way to handle this case?
+    if to_write.is_some() {
+        return to_write
     }
+
+    // Recurse until stage doesn't return Some(read_val) or there are no more stages
+    read_out.and_then(|read_val| {
+        chain.next_stage_mut().and_then(|c| {
+            read_and_write_stages(c, read_val, socket)
+        })
+    }).and_then(|(input, promise)| {
+        // Do not let write stage write anything
+        let mut ctx = PipelineContext::<_, Void>::new(socket);
+        chain.write(&mut ctx, input, promise)
+    })
 }
 
 fn prepend_stage<S, St, C>(stage: St, chain: Option<C>) -> Linker<St, C>
@@ -106,7 +125,6 @@ mod tests {
         send.send(read.clone()).unwrap();
 
         let mut pipeline = Pipeline::<_, End<Vec<u8>, Vec<u8>>>::new(Stub).
-            add_stage(FakePassthroughStage::<Vec<u8>, Vec<u8>>::new()).
             add_stage(FakeReadWriteStage::new()).
             add_stage(FakePassthroughStage::<Vec<u8>, Vec<u8>>::new()).
             add_stage(stage);
