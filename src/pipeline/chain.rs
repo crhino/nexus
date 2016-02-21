@@ -1,6 +1,7 @@
 use pipeline::{Context, Stage, ReadStage, WriteStage};
 use void::Void;
 use std::marker::PhantomData;
+use future::{Promise};
 
 pub trait Chain<S>: Stage<S> {
     type Next: Chain<S> + Stage<S, ReadInput=Self::ReadOutput, WriteOutput=Self::WriteInput>;
@@ -93,7 +94,9 @@ impl<S> Stage<S> for () {
         unreachable!()
     }
 
-    fn write<C>(&mut self, _ctx: &mut C, input: Self::WriteInput) -> Option<Self::WriteOutput> where C: Context {
+    fn write<C>(&mut self, ctx: &mut C, input: Self::WriteInput, promise: Promise<()>)
+        -> Option<(Self::WriteOutput, Promise<()>)>
+            where C: Context {
         unreachable!()
     }
 
@@ -116,7 +119,9 @@ impl<S, R, W> Stage<S> for End<R, W> {
         unreachable!()
     }
 
-    fn write<C>(&mut self, _ctx: &mut C, input: Self::WriteInput) -> Option<Self::WriteOutput> where C: Context {
+    fn write<C>(&mut self, ctx: &mut C, input: Self::WriteInput, promise: Promise<()>)
+        -> Option<(Self::WriteOutput, Promise<()>)>
+            where C: Context {
         unreachable!()
     }
 
@@ -141,10 +146,10 @@ impl<S, S1: Stage<S>, S2> Stage<S> for Linker<S1, S2> {
         self.stage.closed(ctx)
     }
 
-    fn write<C>(&mut self, ctx: &mut C, input: Self::WriteInput)
-        -> Option<Self::WriteOutput>
+    fn write<C>(&mut self, ctx: &mut C, input: Self::WriteInput, promise: Promise<()>)
+        -> Option<(Self::WriteOutput, Promise<()>)>
             where C: Context<Socket=S> {
-        self.stage.write(ctx, input)
+        self.stage.write(ctx, input, promise)
     }
 
     fn read<C>(&mut self, ctx: &mut C, input: Self::ReadInput)

@@ -1,4 +1,4 @@
-use future::NexusFuture;
+use future::Future;
 use std::marker::PhantomData;
 
 pub trait Context {
@@ -6,7 +6,7 @@ pub trait Context {
     type Write;
 
     fn socket(&mut self) -> &mut Self::Socket;
-    fn write(&mut self, obj: Self::Write) -> NexusFuture<()>;
+    fn write(&mut self, obj: Self::Write) -> Future<()>;
     fn close(&mut self);
 }
 
@@ -32,7 +32,7 @@ impl<'a, S: 'a, W> Context for PipelineContext<'a, S, W> {
         self.socket
     }
 
-    fn write(&mut self, obj: Self::Write) -> NexusFuture<()> {
+    fn write(&mut self, obj: Self::Write) -> Future<()> {
         unimplemented!()
     }
 

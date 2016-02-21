@@ -45,11 +45,11 @@ impl<T> Inner<T> {
 }
 
 #[derive(Debug)]
-pub struct NexusFuture<T> {
+pub struct Future<T> {
     inner: Arc<Inner<T>>,
 }
 
-impl<T> NexusFuture<T> {
+impl<T> Future<T> {
     pub fn get(&self) -> io::Result<T> {
         self.inner.get()
     }
@@ -59,23 +59,24 @@ impl<T> NexusFuture<T> {
     }
 }
 
-pub struct NexusPromise<T> {
+#[derive(Debug)]
+pub struct Promise<T> {
     inner: Arc<Inner<T>>,
 }
 
-impl<T> NexusPromise<T> {
+impl<T> Promise<T> {
     pub fn set(&self, data: io::Result<T>) {
         self.inner.set(data)
     }
 }
 
-pub fn pair<T>() -> (NexusPromise<T>, NexusFuture<T>) {
+pub fn pair<T>() -> (Promise<T>, Future<T>) {
     let inner = Arc::new(Inner::new());
-    let promise = NexusPromise {
+    let promise = Promise {
         inner: inner.clone(),
     };
 
-    let future = NexusFuture {
+    let future = Future {
         inner: inner,
     };
 

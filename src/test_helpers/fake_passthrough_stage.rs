@@ -1,4 +1,5 @@
 use pipeline::{Context, Stage, WriteStage, ReadStage};
+use future::{Promise};
 use std::marker::PhantomData;
 
 #[derive(Debug)]
@@ -34,9 +35,9 @@ impl<S, R, W> Stage<S> for FakePassthroughStage<R, W> {
         Some(input)
     }
 
-    fn write<C>(&mut self, ctx: &mut C, input: Self::WriteInput)
-        -> Option<Self::WriteOutput>
+    fn write<C>(&mut self, ctx: &mut C, input: Self::WriteInput, promise: Promise<()>)
+        -> Option<(Self::WriteOutput, Promise<()>)>
             where C: Context<Socket=S> {
-        Some(input)
+        Some((input, promise))
     }
 }

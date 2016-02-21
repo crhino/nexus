@@ -1,4 +1,5 @@
 use pipeline::{Context, Stage, WriteStage};
+use future::{Promise};
 use std::io::{self, Write};
 
 #[derive(Debug)]
@@ -30,9 +31,9 @@ impl<S> WriteStage<S> for FakeWriteStage {
         self.closed = true;
     }
 
-    fn write<C>(&mut self, ctx: &mut C, input: Self::Input)
-        -> Option<Self::Output>
+    fn write<C>(&mut self, ctx: &mut C, input: Self::Input, promise: Promise<()>)
+        -> Option<(Self::Output, Promise<()>)>
             where C: Context<Socket=S> {
-        Some(self.written.write_all(&[input]))
+        Some((self.written.write_all(&[input]), promise))
     }
 }

@@ -1,13 +1,13 @@
 use pipeline::{Context, Stage, ReadStage};
 use std::io::{self, Write};
 use std::marker::PhantomData;
-use future::NexusFuture;
+use future::{Future, Promise};
 
 pub struct FakeReadStage {
     pub read: Vec<u8>,
     pub connected: bool,
     pub closed: bool,
-    future: Option<NexusFuture<()>>,
+    future: Option<Future<()>>,
 }
 
 impl FakeReadStage {

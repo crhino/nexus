@@ -1,6 +1,6 @@
 use pipeline::{Context, Stage};
 use std::io::{self, Write};
-use future::NexusFuture;
+use future::{Future, Promise};
 use std::sync::mpsc::{channel, Sender, Receiver};
 use std::marker::PhantomData;
 use void::Void;
@@ -43,8 +43,8 @@ impl<S> Stage<S> for FakeBaseStage {
         Some(self.vec.clone())
     }
 
-    fn write<C>(&mut self, ctx: &mut C, input: Self::WriteInput)
-        -> Option<Self::WriteOutput>
+    fn write<C>(&mut self, ctx: &mut C, input: Self::WriteInput, promise: Promise<()>)
+        -> Option<(Self::WriteOutput, Promise<()>)>
             where C: Context<Socket=S> {
         self.output.send(input).unwrap();
         None

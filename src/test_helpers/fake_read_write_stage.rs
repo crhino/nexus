@@ -1,7 +1,7 @@
 use pipeline::{Context, Stage, ReadStage};
 use std::io::{self, Write};
 use std::marker::PhantomData;
-use future::NexusFuture;
+use future::{Future, Promise};
 
 #[derive(Debug)]
 pub struct FakeReadWriteStage {
@@ -9,7 +9,7 @@ pub struct FakeReadWriteStage {
     pub write: Vec<u8>,
     pub connected: bool,
     pub closed: bool,
-    future: Option<NexusFuture<()>>,
+    future: Option<Future<()>>,
 }
 
 impl FakeReadWriteStage {
@@ -46,10 +46,10 @@ impl<S> Stage<S> for FakeReadWriteStage {
         Some(input)
     }
 
-    fn write<C>(&mut self, ctx: &mut C, input: Self::WriteInput)
-        -> Option<Self::WriteOutput>
+    fn write<C>(&mut self, ctx: &mut C, input: Self::WriteInput, promise: Promise<()>)
+        -> Option<(Self::WriteOutput, Promise<()>)>
             where C: Context<Socket=S> {
         self.write.write_all(&input[..]);
-        Some(input)
+        Some((input, promise))
     }
 }

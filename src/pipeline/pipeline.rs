@@ -43,25 +43,6 @@ impl<S, Start: Chain<S> + Stage<S>> Pipeline<S, Start> {
         }
 }
 
-// fn read_stage_and_return_next<'a, C, R, S, S2>(chain: &'a mut C, input: R, socket: &mut S)
-//     -> Option<S2::ReadInput>
-//         where C: Chain<'a, S, Next=S2, ReadInput=R>,
-//               S2: Chain<'a, S, ReadInput=C::ReadOutput> {
-//         let mut ctx = PipelineContext::new(socket);
-//         chain.read(&mut ctx, input)
-// }
-
-// fn read_write_stages<'a, C, R, S: 'a, S2: 'a>(chain: &'a mut C, input: R, socket: &mut S)
-//     where C: Chain<'a, S, Next=S2, ReadInput=R>,
-//           S2: Chain<'a, S, ReadInput=C::ReadOutput, WriteOutput=C::WriteInput> {
-//               let output = { read_stage_and_return_next::<C, R, S, S2>(chain, input, socket) };
-//               if let Some(read_val) = output {
-//                   if let Some(c) = chain.next_stage_mut() {
-//                       read_write_stages(c, read_val, socket);
-//                   }
-//               }
-// }
-
 fn read_and_write_stages<S, R, S2, C>(chain: &mut C, input: R, socket: &mut S)
     where C: Chain<S, Next=S2, ReadInput=R>,
           S2: Chain<S, ReadInput=C::ReadOutput, WriteOutput=C::WriteInput> {
@@ -70,7 +51,7 @@ fn read_and_write_stages<S, R, S2, C>(chain: &mut C, input: R, socket: &mut S)
         chain.read(&mut ctx, input)
     };
 
-    // Recurse until stage doesn't return Some(read_val)
+    // Recurse until stage doesn't return Some(read_val) or there are no more stages
     if let Some(read_val) = read_out {
         if let Some(c) = chain.next_stage_mut() {
             read_and_write_stages(c, read_val, socket);

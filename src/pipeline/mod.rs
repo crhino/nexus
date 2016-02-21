@@ -15,7 +15,7 @@ pub use self::pipeline::{Pipeline};
 
 use std::io;
 use std::marker::PhantomData;
-use future::NexusFuture;
+use future::{Promise};
 
 pub trait Stage<S> {
     type ReadInput;
@@ -29,12 +29,12 @@ pub trait Stage<S> {
         where C: Context<Socket=S>;
     fn read<C>(&mut self, ctx: &mut C, input: Self::ReadInput) -> Option<Self::ReadOutput>
             where C: Context<Socket=S, Write=Self::WriteOutput>;
-    fn write<C>(&mut self, ctx: &mut C, input: Self::WriteInput) -> Option<Self::WriteOutput>
+    fn write<C>(&mut self, ctx: &mut C, input: Self::WriteInput, promise: Promise<()>)
+        -> Option<(Self::WriteOutput, Promise<()>)>
             where C: Context<Socket=S>;
 }
 
-pub trait ReadStage<S> {
-    type Input;
+pub trait ReadStage<S> { type Input;
     type Output;
 
     fn connected<C>(&mut self, ctx: &mut C)
@@ -81,10 +81,10 @@ impl<R: ReadStage<S>, S, W> Stage<S> for ReadOnlyStage<R, W> {
         self.read_stage.read(ctx, input)
     }
 
-    fn write<C>(&mut self, ctx: &mut C, input: Self::WriteInput)
-        -> Option<Self::WriteOutput>
+    fn write<C>(&mut self, ctx: &mut C, input: Self::WriteInput, promise: Promise<()>)
+        -> Option<(Self::WriteOutput, Promise<()>)>
             where C: Context<Socket=S> {
-        Some(input)
+        Some((input, promise))
     }
 }
 
@@ -96,7 +96,8 @@ pub trait WriteStage<S> {
         where C: Context<Socket=S, Write=Self::Output>;
     fn closed<C>(&mut self, ctx: &mut C)
         where C: Context<Socket=S>;
-    fn write<C>(&mut self, ctx: &mut C, input: Self::Input) -> Option<Self::Output>
+    fn write<C>(&mut self, ctx: &mut C, input: Self::Input, promise: Promise<()>)
+        -> Option<(Self::Output, Promise<()>)>
             where C: Context<Socket=S>;
 }
 
@@ -136,9 +137,9 @@ impl<S, R, W: WriteStage<S>> Stage<S> for WriteOnlyStage<R, W> {
         Some(input)
     }
 
-    fn write<C>(&mut self, ctx: &mut C, input: Self::WriteInput)
-        -> Option<Self::WriteOutput>
+    fn write<C>(&mut self, ctx: &mut C, input: Self::WriteInput, promise: Promise<()>)
+        -> Option<(Self::WriteOutput, Promise<()>)>
             where C: Context<Socket=S> {
-        self.write_stage.write(ctx, input)
+        self.write_stage.write(ctx, input, promise)
     }
 }
