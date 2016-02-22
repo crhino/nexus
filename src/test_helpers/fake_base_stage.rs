@@ -50,4 +50,10 @@ impl<S> Stage<S> for FakeBaseStage {
         promise.set(Ok(()));
         None
     }
+
+    fn writable<C>(&mut self, ctx: &mut C)
+        -> Option<(Self::WriteOutput, Promise<()>)>
+            where C: Context<Socket=S> {
+                None
+            }
 }

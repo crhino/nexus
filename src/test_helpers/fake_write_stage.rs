@@ -36,4 +36,10 @@ impl<S> WriteStage<S> for FakeWriteStage {
             where C: Context<Socket=S> {
         Some((self.written.write_all(&[input]), promise))
     }
+
+    fn writable<C>(&mut self, ctx: &mut C)
+        -> Option<(Self::Output, Promise<()>)>
+            where C: Context<Socket=S> {
+                None
+            }
 }

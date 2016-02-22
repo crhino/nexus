@@ -40,4 +40,10 @@ impl<S, R, W> Stage<S> for FakePassthroughStage<R, W> {
             where C: Context<Socket=S> {
         Some((input, promise))
     }
+
+    fn writable<C>(&mut self, ctx: &mut C)
+        -> Option<(Self::WriteOutput, Promise<()>)>
+            where C: Context<Socket=S> {
+                None
+            }
 }

@@ -100,6 +100,12 @@ impl<S> Stage<S> for () {
         unreachable!()
     }
 
+    fn writable<C>(&mut self, ctx: &mut C)
+        -> Option<(Self::WriteOutput, Promise<()>)>
+            where C: Context<Socket=S> {
+                unreachable!()
+            }
+
     fn read<C>(&mut self, _ctx: &mut C, input: Self::ReadInput) -> Option<Self::ReadOutput> where C: Context<Write=Self::WriteOutput> {
         unreachable!()
     }
@@ -124,6 +130,12 @@ impl<S, R, W> Stage<S> for End<R, W> {
             where C: Context {
         unreachable!()
     }
+
+    fn writable<C>(&mut self, ctx: &mut C)
+        -> Option<(Self::WriteOutput, Promise<()>)>
+            where C: Context<Socket=S> {
+                unreachable!()
+            }
 
     fn read<C>(&mut self, _ctx: &mut C, input: Self::ReadInput) -> Option<Self::ReadOutput> where C: Context<Write=Self::WriteOutput> {
         unreachable!()
@@ -151,6 +163,12 @@ impl<S, S1: Stage<S>, S2> Stage<S> for Linker<S1, S2> {
             where C: Context<Socket=S> {
         self.stage.write(ctx, input, promise)
     }
+
+    fn writable<C>(&mut self, ctx: &mut C)
+        -> Option<(Self::WriteOutput, Promise<()>)>
+            where C: Context<Socket=S> {
+                self.stage.writable(ctx)
+            }
 
     fn read<C>(&mut self, ctx: &mut C, input: Self::ReadInput)
         -> Option<Self::ReadOutput>

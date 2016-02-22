@@ -44,11 +44,40 @@ impl<S, Start: Chain<S, ReadInput=()>> Pipeline<S, Start> {
         });
     }
 
-    // Writable will only call the first stage, since that is the only one that should be writing
-    // to the socket.
+    /// Signifies that the socket is now writable. This will call stages 'writable' method until a
+    /// stage returns data to write or there are no more stages.
     pub fn writable(&mut self) {
+        let list = &mut self.list;
+        let socket = &mut self.socket;
+
+        list.as_mut().and_then(|chain| {
+            do_writable_iteration(chain, socket)
+        });
     }
 }
+
+fn do_writable_iteration<S, S2, C>(chain: &mut C, socket: &mut S)
+-> Option<(C::WriteOutput, Promise<()>)>
+    where C: Chain<S, Next=S2>,
+          S2: Chain<S, ReadInput=C::ReadOutput, WriteOutput=C::WriteInput> {
+              // Recurse first so that we call writable on last stage first and flow back from there
+              let to_write = chain.next_stage_mut().and_then(|c| {
+                  do_writable_iteration(c, socket)
+              });
+
+              // If there is nothing to write, check to see if the current stage has something,
+              // else call write method on current stage without calling writable
+              match to_write {
+                  None => {
+                      let mut ctx = PipelineContext::<_, Void>::new(socket);
+                      chain.writable(&mut ctx)
+                  },
+                  Some((write, promise)) => {
+                      let mut ctx = PipelineContext::<_, Void>::new(socket);
+                      chain.write(&mut ctx, write, promise)
+                  }
+              }
+          }
 
 fn read_and_write_stages<S, R, S2, C>(chain: &mut C, input: R, socket: &mut S)
 -> Option<(C::WriteOutput, Promise<()>)>
@@ -119,6 +148,23 @@ mod tests {
     }
 
     #[test]
+    fn test_pipeline_writable() {
+        let (_send, _recv, stage) = FakeBaseStage::new();
+
+        let last_stage = Arc::new(Mutex::new(FakeReadWriteStage::new()));
+
+        let mut pipeline = Pipeline::<_, End<Vec<u8>, Vec<u8>>>::new(Stub).
+            add_stage(last_stage.clone()).
+            add_stage(FakePassthroughStage::<Vec<u8>, Vec<u8>>::new()).
+            add_stage(stage);
+
+        // FakeReadWriteStage will send a vec to be written
+        pipeline.writable();
+
+        expect(&last_stage.lock().unwrap().get_writable_future()).to(be_ok());
+    }
+
+    #[test]
     fn test_pipeline_read_write_cycle() {
         // 1. Multiple stage pipeline
         let (send, recv, stage) = FakeBaseStage::new();
@@ -134,8 +180,6 @@ mod tests {
         // 2. Initiate a read for pipeline
         pipeline.readable();
         // 3. Last read stage should write back
-        // 4. Trigger pipeline write
-        pipeline.writable();
         // 5. Assert that write was received
         let written = recv.try_recv().unwrap();
 

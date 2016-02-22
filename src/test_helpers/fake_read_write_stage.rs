@@ -1,6 +1,6 @@
 use pipeline::{Context, Stage, ReadStage};
 use std::io::{self, Write};
-use future::{Future, Promise};
+use future::{Future, Promise, pair};
 use std::sync::{Arc, Mutex};
 
 #[derive(Debug)]
@@ -10,6 +10,7 @@ pub struct FakeReadWriteStage {
     pub connected: bool,
     pub closed: bool,
     future: Option<Future<()>>,
+    writable_future: Option<Future<()>>,
 }
 
 impl FakeReadWriteStage {
@@ -20,11 +21,16 @@ impl FakeReadWriteStage {
             connected: false,
             closed: false,
             future: None,
+            writable_future: None,
         }
     }
 
     pub fn get_future(&mut self) -> io::Result<()> {
         self.future.take().unwrap().get()
+    }
+
+    pub fn get_writable_future(&mut self) -> io::Result<()> {
+        self.writable_future.take().unwrap().get()
     }
 }
 
@@ -53,6 +59,12 @@ impl<S> Stage<S> for Arc<Mutex<FakeReadWriteStage>> {
             where C: Context<Socket=S> {
         self.lock().unwrap().write(ctx, input, promise)
     }
+
+    fn writable<C>(&mut self, ctx: &mut C)
+        -> Option<(Self::WriteOutput, Promise<()>)>
+            where C: Context<Socket=S> {
+                self.lock().unwrap().writable(ctx)
+            }
 }
 
 impl<S> Stage<S> for FakeReadWriteStage {
@@ -83,4 +95,13 @@ impl<S> Stage<S> for FakeReadWriteStage {
         self.write.write_all(&input[..]);
         Some((input, promise))
     }
+
+    fn writable<C>(&mut self, ctx: &mut C)
+        -> Option<(Self::WriteOutput, Promise<()>)>
+            where C: Context<Socket=S> {
+                let (promise, future) = pair();
+                self.writable_future = Some(future);
+                let vec = vec!(3,3,3);
+                Some((vec, promise))
+            }
 }

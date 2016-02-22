@@ -33,6 +33,11 @@ pub trait Stage<S> {
     fn write<C>(&mut self, ctx: &mut C, input: Self::WriteInput, promise: Promise<()>)
         -> Option<(Self::WriteOutput, Promise<()>)>
             where C: Context<Socket=S>;
+    /// Called when socket changes state to being writable. This method should return any data that
+    /// the stage wants to write to the socket, just like the write method.
+    fn writable<C>(&mut self, ctx: &mut C)
+        -> Option<(Self::WriteOutput, Promise<()>)>
+            where C: Context<Socket=S>;
 }
 
 pub trait ReadStage<S> { type Input;
@@ -87,6 +92,12 @@ impl<R: ReadStage<S>, S, W> Stage<S> for ReadOnlyStage<R, W> {
             where C: Context<Socket=S> {
         Some((input, promise))
     }
+
+    fn writable<C>(&mut self, ctx: &mut C)
+        -> Option<(Self::WriteOutput, Promise<()>)>
+            where C: Context<Socket=S> {
+                None
+            }
 }
 
 pub trait WriteStage<S> {
@@ -98,6 +109,9 @@ pub trait WriteStage<S> {
     fn closed<C>(&mut self, ctx: &mut C)
         where C: Context<Socket=S>;
     fn write<C>(&mut self, ctx: &mut C, input: Self::Input, promise: Promise<()>)
+        -> Option<(Self::Output, Promise<()>)>
+            where C: Context<Socket=S>;
+    fn writable<C>(&mut self, ctx: &mut C)
         -> Option<(Self::Output, Promise<()>)>
             where C: Context<Socket=S>;
 }
@@ -143,4 +157,10 @@ impl<S, R, W: WriteStage<S>> Stage<S> for WriteOnlyStage<R, W> {
             where C: Context<Socket=S> {
         self.write_stage.write(ctx, input, promise)
     }
+
+    fn writable<C>(&mut self, ctx: &mut C)
+        -> Option<(Self::WriteOutput, Promise<()>)>
+            where C: Context<Socket=S> {
+                self.write_stage.writable(ctx)
+            }
 }
