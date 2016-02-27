@@ -40,7 +40,7 @@ impl<S> Stage<S> for Arc<Mutex<FakeReadWriteStage>> {
     type WriteInput = <FakeReadWriteStage as Stage<S>>::WriteInput;
     type WriteOutput = <FakeReadWriteStage as Stage<S>>::WriteOutput;
 
-    fn connected<C>(&mut self, ctx: &mut C) where C: Context<Write=Self::WriteOutput> {
+    fn connected<C>(&mut self, ctx: &mut C) where C: Context {
         self.lock().unwrap().connected(ctx)
     }
 

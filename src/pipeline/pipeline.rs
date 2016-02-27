@@ -35,12 +35,23 @@ impl<S, Start: Chain<S> + Stage<S>> Pipeline<S, Start> {
 }
 
 impl<S, Start: Chain<S, ReadInput=()>> Pipeline<S, Start> {
+    /// Calls connected method and then writable.
+    pub fn connected(&mut self) {
+        let list = &mut self.list;
+        let socket = &mut self.socket;
+
+        list.as_mut().and_then(|chain| {
+            do_connected_iteration(chain, socket);
+            do_writable_iteration(chain, socket)
+        });
+    }
+
     pub fn readable(&mut self) {
         let list = &mut self.list;
         let socket = &mut self.socket;
 
         list.as_mut().and_then(|chain| {
-            read_and_write_stages(chain, (), socket)
+            do_read_and_write_iteration(chain, (), socket)
         });
     }
 
@@ -54,6 +65,17 @@ impl<S, Start: Chain<S, ReadInput=()>> Pipeline<S, Start> {
             do_writable_iteration(chain, socket)
         });
     }
+}
+
+fn do_connected_iteration<S, S2, C>(chain: &mut C, socket: &mut S)
+where C: Chain<S, Next=S2>,
+S2: Chain<S, ReadInput=C::ReadOutput, WriteOutput=C::WriteInput> {
+    chain.next_stage_mut().map(|c| {
+        do_connected_iteration(c, socket);
+    });
+
+    let mut ctx = PipelineContext::<_, Void>::new(socket);
+    chain.connected(&mut ctx);
 }
 
 fn do_writable_iteration<S, S2, C>(chain: &mut C, socket: &mut S)
@@ -79,7 +101,7 @@ fn do_writable_iteration<S, S2, C>(chain: &mut C, socket: &mut S)
               }
           }
 
-fn read_and_write_stages<S, R, S2, C>(chain: &mut C, input: R, socket: &mut S)
+fn do_read_and_write_iteration<S, R, S2, C>(chain: &mut C, input: R, socket: &mut S)
 -> Option<(C::WriteOutput, Promise<()>)>
     where C: Chain<S, Next=S2, ReadInput=R>,
           S2: Chain<S, ReadInput=C::ReadOutput, WriteOutput=C::WriteInput> {
@@ -98,7 +120,7 @@ fn read_and_write_stages<S, R, S2, C>(chain: &mut C, input: R, socket: &mut S)
     // Recurse until stage doesn't return Some(read_val) or there are no more stages
     read_out.and_then(|read_val| {
         chain.next_stage_mut().and_then(|c| {
-            read_and_write_stages(c, read_val, socket)
+            do_read_and_write_iteration(c, read_val, socket)
         })
     }).and_then(|(input, promise)| {
         // Do not let write stage write anything
@@ -161,6 +183,27 @@ mod tests {
         // FakeReadWriteStage will send a vec to be written
         pipeline.writable();
 
+        expect(&last_stage.lock().unwrap().get_writable_future()).to(be_ok());
+    }
+
+    #[test]
+    fn test_pipeline_connected() {
+        let (_send, recv, stage) = FakeBaseStage::new();
+        let read = vec!(3,3,3);
+
+        let last_stage = Arc::new(Mutex::new(FakeReadWriteStage::new()));
+
+        let mut pipeline = Pipeline::<_, End<Vec<u8>, Vec<u8>>>::new(Stub).
+            add_stage(last_stage.clone()).
+            add_stage(FakePassthroughStage::<Vec<u8>, Vec<u8>>::new()).
+            add_stage(stage);
+        // 2. Initiate a connect for pipeline
+        pipeline.connected();
+        // 3. Last read stage should write vector
+        // 5. Assert that write was received
+        let written = recv.try_recv().unwrap();
+
+        expect(&written).to(equal(&read));
         expect(&last_stage.lock().unwrap().get_writable_future()).to(be_ok());
     }
 

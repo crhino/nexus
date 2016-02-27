@@ -149,7 +149,7 @@ impl<S, S1: Stage<S>, S2> Stage<S> for Linker<S1, S2> {
     type WriteOutput = S1::WriteOutput;
 
     fn connected<C>(&mut self, ctx: &mut C)
-        where C: Context<Socket=S, Write=Self::WriteOutput> {
+        where C: Context<Socket=S> {
         self.stage.connected(ctx)
     }
 

@@ -24,7 +24,7 @@ pub trait Stage<S> {
     type WriteOutput;
 
     fn connected<C>(&mut self, ctx: &mut C)
-        where C: Context<Socket=S, Write=Self::WriteOutput>;
+        where C: Context<Socket=S>;
     fn closed<C>(&mut self, ctx: &mut C)
         where C: Context<Socket=S>;
     // If the read method initiates a write command, any output is silently discarded.
@@ -72,7 +72,7 @@ impl<R: ReadStage<S>, S, W> Stage<S> for ReadOnlyStage<R, W> {
     type WriteOutput = W;
 
     fn connected<C>(&mut self, ctx: &mut C)
-        where C: Context<Socket=S, Write=Self::WriteOutput> {
+        where C: Context<Socket=S> {
         self.read_stage.connected(ctx)
     }
 
@@ -105,7 +105,7 @@ pub trait WriteStage<S> {
     type Output;
 
     fn connected<C>(&mut self, ctx: &mut C)
-        where C: Context<Socket=S, Write=Self::Output>;
+        where C: Context<Socket=S>;
     fn closed<C>(&mut self, ctx: &mut C)
         where C: Context<Socket=S>;
     fn write<C>(&mut self, ctx: &mut C, input: Self::Input, promise: Promise<()>)
@@ -137,7 +137,7 @@ impl<S, R, W: WriteStage<S>> Stage<S> for WriteOnlyStage<R, W> {
     type WriteOutput = W::Output;
 
     fn connected<C>(&mut self, ctx: &mut C)
-        where C: Context<Socket=S, Write=Self::WriteOutput> {
+        where C: Context<Socket=S> {
         self.write_stage.connected(ctx)
     }
 
