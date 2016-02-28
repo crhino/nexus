@@ -46,6 +46,15 @@ impl<S, Start: Chain<S, ReadInput=()>> Pipeline<S, Start> {
         });
     }
 
+    pub fn closed(&mut self) {
+        let list = &mut self.list;
+        let socket = &mut self.socket;
+
+        list.as_mut().map(|chain| {
+            do_closed_iteration(chain, socket);
+        });
+    }
+
     pub fn readable(&mut self) {
         let list = &mut self.list;
         let socket = &mut self.socket;
@@ -65,6 +74,17 @@ impl<S, Start: Chain<S, ReadInput=()>> Pipeline<S, Start> {
             do_writable_iteration(chain, socket)
         });
     }
+}
+
+fn do_closed_iteration<S, S2, C>(chain: &mut C, socket: &mut S)
+where C: Chain<S, Next=S2>,
+S2: Chain<S, ReadInput=C::ReadOutput, WriteOutput=C::WriteInput> {
+    chain.next_stage_mut().map(|c| {
+        do_closed_iteration(c, socket);
+    });
+
+    let mut ctx = PipelineContext::<_, Void>::new(socket);
+    chain.closed(&mut ctx);
 }
 
 fn do_connected_iteration<S, S2, C>(chain: &mut C, socket: &mut S)
@@ -205,6 +225,22 @@ mod tests {
 
         expect(&written).to(equal(&read));
         expect(&last_stage.lock().unwrap().get_writable_future()).to(be_ok());
+    }
+
+    #[test]
+    fn test_pipeline_closed() {
+        let (_send, _recv, stage) = FakeBaseStage::new();
+
+        let last_stage = Arc::new(Mutex::new(FakeReadWriteStage::new()));
+
+        let mut pipeline = Pipeline::<_, End<Vec<u8>, Vec<u8>>>::new(Stub).
+            add_stage(last_stage.clone()).
+            add_stage(FakePassthroughStage::<Vec<u8>, Vec<u8>>::new()).
+            add_stage(stage);
+
+        pipeline.closed();
+
+        assert!(&last_stage.lock().unwrap().closed);
     }
 
     #[test]
