@@ -35,13 +35,13 @@ impl<S, Start: Chain<S> + Stage<S>> Pipeline<S, Start> {
 }
 
 impl<S, Start: Chain<S, ReadInput=()>> Pipeline<S, Start> {
-    /// Calls connected method and then writable.
-    pub fn connected(&mut self) {
+    /// Calls spawned method and then writable.
+    pub fn spawned(&mut self) {
         let list = &mut self.list;
         let socket = &mut self.socket;
 
         list.as_mut().and_then(|chain| {
-            do_connected_iteration(chain, socket);
+            do_spawned_iteration(chain, socket);
             do_writable_iteration(chain, socket)
         });
     }
@@ -87,15 +87,15 @@ S2: Chain<S, ReadInput=C::ReadOutput, WriteOutput=C::WriteInput> {
     chain.closed(&mut ctx);
 }
 
-fn do_connected_iteration<S, S2, C>(chain: &mut C, socket: &mut S)
+fn do_spawned_iteration<S, S2, C>(chain: &mut C, socket: &mut S)
 where C: Chain<S, Next=S2>,
 S2: Chain<S, ReadInput=C::ReadOutput, WriteOutput=C::WriteInput> {
     chain.next_stage_mut().map(|c| {
-        do_connected_iteration(c, socket);
+        do_spawned_iteration(c, socket);
     });
 
     let mut ctx = PipelineContext::<_, Void>::new(socket);
-    chain.connected(&mut ctx);
+    chain.spawned(&mut ctx);
 }
 
 fn do_writable_iteration<S, S2, C>(chain: &mut C, socket: &mut S)
@@ -207,7 +207,7 @@ mod tests {
     }
 
     #[test]
-    fn test_pipeline_connected() {
+    fn test_pipeline_spawned() {
         let (_send, recv, stage) = FakeBaseStage::new();
         let read = vec!(3,3,3);
 
@@ -218,11 +218,12 @@ mod tests {
             add_stage(FakePassthroughStage::<Vec<u8>, Vec<u8>>::new()).
             add_stage(stage);
         // 2. Initiate a connect for pipeline
-        pipeline.connected();
+        pipeline.spawned();
         // 3. Last read stage should write vector
         // 5. Assert that write was received
         let written = recv.try_recv().unwrap();
 
+        assert!(&last_stage.lock().unwrap().spawned);
         expect(&written).to(equal(&read));
         expect(&last_stage.lock().unwrap().get_writable_future()).to(be_ok());
     }

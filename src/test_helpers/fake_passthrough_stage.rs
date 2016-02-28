@@ -23,7 +23,7 @@ impl<S, R, W> Stage<S> for FakePassthroughStage<R, W> {
     type WriteInput = W;
     type WriteOutput = W;
 
-    fn connected<C>(&mut self, ctx: &mut C) where C: Context {
+    fn spawned<C>(&mut self, ctx: &mut C) where C: Context {
     }
 
     fn closed<C>(&mut self, ctx: &mut C) where C: Context {

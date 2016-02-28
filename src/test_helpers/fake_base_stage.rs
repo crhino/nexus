@@ -30,7 +30,7 @@ impl<S> Stage<S> for FakeBaseStage {
     type WriteInput = Vec<u8>;
     type WriteOutput = ();
 
-    fn connected<C>(&mut self, ctx: &mut C) where C: Context {
+    fn spawned<C>(&mut self, ctx: &mut C) where C: Context {
     }
 
     fn closed<C>(&mut self, ctx: &mut C) where C: Context {

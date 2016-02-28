@@ -23,7 +23,7 @@ pub trait Stage<S> {
     type WriteInput;
     type WriteOutput;
 
-    fn connected<C>(&mut self, ctx: &mut C)
+    fn spawned<C>(&mut self, ctx: &mut C)
         where C: Context<Socket=S>;
     fn closed<C>(&mut self, ctx: &mut C)
         where C: Context<Socket=S>;
@@ -43,7 +43,7 @@ pub trait Stage<S> {
 pub trait ReadStage<S> { type Input;
     type Output;
 
-    fn connected<C>(&mut self, ctx: &mut C)
+    fn spawned<C>(&mut self, ctx: &mut C)
         where C: Context<Socket=S>;
     fn closed<C>(&mut self, ctx: &mut C)
         where C: Context<Socket=S>;
@@ -71,9 +71,9 @@ impl<R: ReadStage<S>, S, W> Stage<S> for ReadOnlyStage<R, W> {
     type WriteInput = W;
     type WriteOutput = W;
 
-    fn connected<C>(&mut self, ctx: &mut C)
+    fn spawned<C>(&mut self, ctx: &mut C)
         where C: Context<Socket=S> {
-        self.read_stage.connected(ctx)
+        self.read_stage.spawned(ctx)
     }
 
     fn closed<C>(&mut self, ctx: &mut C)
@@ -104,7 +104,7 @@ pub trait WriteStage<S> {
     type Input;
     type Output;
 
-    fn connected<C>(&mut self, ctx: &mut C)
+    fn spawned<C>(&mut self, ctx: &mut C)
         where C: Context<Socket=S>;
     fn closed<C>(&mut self, ctx: &mut C)
         where C: Context<Socket=S>;
@@ -136,9 +136,9 @@ impl<S, R, W: WriteStage<S>> Stage<S> for WriteOnlyStage<R, W> {
     type WriteInput = W::Input;
     type WriteOutput = W::Output;
 
-    fn connected<C>(&mut self, ctx: &mut C)
+    fn spawned<C>(&mut self, ctx: &mut C)
         where C: Context<Socket=S> {
-        self.write_stage.connected(ctx)
+        self.write_stage.spawned(ctx)
     }
 
     fn closed<C>(&mut self, ctx: &mut C)

@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex};
 pub struct FakeReadWriteStage {
     pub read: Vec<u8>,
     pub write: Vec<u8>,
-    pub connected: bool,
+    pub spawned: bool,
     pub closed: bool,
     future: Option<Future<()>>,
     writable_future: Option<Future<()>>,
@@ -18,7 +18,7 @@ impl FakeReadWriteStage {
         FakeReadWriteStage {
             read: Vec::new(),
             write: Vec::new(),
-            connected: false,
+            spawned: false,
             closed: false,
             future: None,
             writable_future: None,
@@ -40,8 +40,8 @@ impl<S> Stage<S> for Arc<Mutex<FakeReadWriteStage>> {
     type WriteInput = <FakeReadWriteStage as Stage<S>>::WriteInput;
     type WriteOutput = <FakeReadWriteStage as Stage<S>>::WriteOutput;
 
-    fn connected<C>(&mut self, ctx: &mut C) where C: Context {
-        self.lock().unwrap().connected(ctx)
+    fn spawned<C>(&mut self, ctx: &mut C) where C: Context {
+        self.lock().unwrap().spawned(ctx)
     }
 
     fn closed<C>(&mut self, ctx: &mut C) where C: Context {
@@ -73,8 +73,8 @@ impl<S> Stage<S> for FakeReadWriteStage {
     type WriteInput = Vec<u8>;
     type WriteOutput = Vec<u8>;
 
-    fn connected<C>(&mut self, ctx: &mut C) where C: Context {
-        self.connected = true;
+    fn spawned<C>(&mut self, ctx: &mut C) where C: Context {
+        self.spawned = true;
     }
 
     fn closed<C>(&mut self, ctx: &mut C) where C: Context {

@@ -5,7 +5,7 @@ use future::{Future, Promise};
 
 pub struct FakeReadStage {
     pub read: Vec<u8>,
-    pub connected: bool,
+    pub spawned: bool,
     pub closed: bool,
     future: Option<Future<()>>,
 }
@@ -14,7 +14,7 @@ impl FakeReadStage {
     pub fn new() -> FakeReadStage {
         FakeReadStage {
             read: Vec::new(),
-            connected: false,
+            spawned: false,
             closed: false,
             future: None,
         }
@@ -25,8 +25,8 @@ impl<S> ReadStage<S> for FakeReadStage {
     type Input = Vec<u8>;
     type Output = io::Result<()>;
 
-    fn connected<C>(&mut self, ctx: &mut C) where C: Context {
-        self.connected = true;
+    fn spawned<C>(&mut self, ctx: &mut C) where C: Context {
+        self.spawned = true;
     }
 
     fn closed<C>(&mut self, ctx: &mut C) where C: Context {

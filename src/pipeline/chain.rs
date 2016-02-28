@@ -86,7 +86,7 @@ impl<S> Stage<S> for () {
     type WriteInput = Void;
     type WriteOutput = Void;
 
-    fn connected<C>(&mut self, _ctx: &mut C) where C: Context {
+    fn spawned<C>(&mut self, _ctx: &mut C) where C: Context {
         unreachable!()
     }
 
@@ -117,7 +117,7 @@ impl<S, R, W> Stage<S> for End<R, W> {
     type WriteInput = Void;
     type WriteOutput = W;
 
-    fn connected<C>(&mut self, _ctx: &mut C) where C: Context {
+    fn spawned<C>(&mut self, _ctx: &mut C) where C: Context {
         unreachable!()
     }
 
@@ -148,9 +148,9 @@ impl<S, S1: Stage<S>, S2> Stage<S> for Linker<S1, S2> {
     type WriteInput = S1::WriteInput;
     type WriteOutput = S1::WriteOutput;
 
-    fn connected<C>(&mut self, ctx: &mut C)
+    fn spawned<C>(&mut self, ctx: &mut C)
         where C: Context<Socket=S> {
-        self.stage.connected(ctx)
+        self.stage.spawned(ctx)
     }
 
     fn closed<C>(&mut self, ctx: &mut C)
