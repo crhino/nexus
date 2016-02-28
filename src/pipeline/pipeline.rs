@@ -233,7 +233,7 @@ mod tests {
 
         let last_stage = Arc::new(Mutex::new(FakeReadWriteStage::new()));
 
-        let mut pipeline = Pipeline::<_, End<Vec<u8>, Vec<u8>>>::new(Stub).
+        let mut pipeline = pipeline(Stub).
             add_stage(last_stage.clone()).
             add_stage(FakePassthroughStage::<Vec<u8>, Vec<u8>>::new()).
             add_stage(stage);
