@@ -169,8 +169,7 @@ C: Chain<S> + Stage<S, ReadInput=St::ReadOutput, WriteOutput=St::WriteInput>
 mod tests {
     use super::*;
     use ferrous::dsl::*;
-    use pipeline::{Stage, ReadOnlyStage, WriteOnlyStage, WriteStage, ReadStage};
-    use pipeline::chain::End;
+    use pipeline::{pipeline, End, Stage, ReadOnlyStage, WriteOnlyStage, WriteStage, ReadStage};
     use test_helpers::{FakeReadStage, FakeReadWriteStage, FakePassthroughStage, FakeWriteStage, FakeBaseStage};
     use std::io::{self, Write, Read};
     use std::sync::{Arc, Mutex};
@@ -253,7 +252,7 @@ mod tests {
 
         let last_stage = Arc::new(Mutex::new(FakeReadWriteStage::new()));
 
-        let mut pipeline = Pipeline::<_, End<Vec<u8>, Vec<u8>>>::new(Stub).
+        let mut pipeline = pipeline(Stub).
             add_stage(last_stage.clone()).
             add_stage(FakePassthroughStage::<Vec<u8>, Vec<u8>>::new()).
             add_stage(stage);

@@ -9,6 +9,7 @@ pub mod context;
 pub use self::context::{Context};
 
 mod chain;
+pub use self::chain::{End};
 
 mod pipeline;
 pub use self::pipeline::{Pipeline};
@@ -16,6 +17,10 @@ pub use self::pipeline::{Pipeline};
 use std::io;
 use std::marker::PhantomData;
 use future::{Promise};
+
+pub fn pipeline<S, R, W>(socket: S) -> Pipeline<S, End<R, W>> {
+    Pipeline::new(socket)
+}
 
 pub trait Stage<S> {
     type ReadInput;
@@ -40,7 +45,8 @@ pub trait Stage<S> {
             where C: Context<Socket=S>;
 }
 
-pub trait ReadStage<S> { type Input;
+pub trait ReadStage<S> {
+    type Input;
     type Output;
 
     fn spawned<C>(&mut self, ctx: &mut C)
