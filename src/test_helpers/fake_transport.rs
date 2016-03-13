@@ -31,6 +31,10 @@ impl<'t> Transport for FakeTransport<'t> {
         self.closed = true
     }
 
+    fn transport_closed(&mut self) {
+        self.closed = true
+    }
+
     fn read(&mut self) -> &[u8] {
         &self.buf[..]
     }

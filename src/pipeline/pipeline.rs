@@ -37,6 +37,9 @@ where T: Transport,
     }
 
     pub fn closed(&mut self) {
+        let mut ctx = PipelineContext::<P::Output>::new();
+        self.protocol.closed(&mut ctx);
+        self.transport.transport_closed();
     }
 
     pub fn readable(&mut self) {
@@ -114,19 +117,18 @@ mod tests {
 
     #[test]
     fn test_pipeline_closed() {
-        // let (_send, _recv, stage) = FakeBaseStage::new();
+        let mut vec = vec!(1, 1, 1);
+        let transport = FakeTransport::new(&mut vec);
+        let codec = FakeCodec::new();
+        let protocol = FakeProtocol::new();
 
-        // let last_stage = Arc::new(Mutex::new(FakeReadWriteStage::new()));
+        let mut pipeline = Pipeline::new(transport, codec, protocol.clone());
+        load_protocol_output(&protocol, vec!(3,3,3));
 
-        // let mut pipeline = pipeline(Stub).
-        //     add_stage(last_stage.clone()).
-        //     add_stage(FakePassthroughStage::<Vec<u8>, Vec<u8>>::new()).
-        //     add_stage(stage);
+        pipeline.closed();
 
-        // pipeline.closed();
-        assert!(false);
-
-        // assert!(&last_stage.lock().unwrap().closed);
+        let mut p = protocol.lock().unwrap();
+        expect(&(p.closed)).to(equal(&true));
     }
 
     #[test]

@@ -19,6 +19,7 @@ pub trait Transport {
     fn buffer(&mut self) -> &mut Self::Buffer;
     fn spawned(&mut self);
     fn close(&mut self);
+    fn transport_closed(&mut self);
     fn read(&mut self) -> &[u8];
     /// Tells transport that "bytes" number of bytes have been read
     fn consume(&mut self, bytes: usize);
