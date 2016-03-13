@@ -14,8 +14,7 @@ keywords = ["networking", "tcp", "udp", "async"]
 
 [dependencies]
 log = "^0.3.4"
-# rotor = "^0.4.0"
-rotor = {git="git://github.com/tailhook/rotor", rev="6ae0b55"}
+rotor = "^0.6.0"
 void = "0.0.5"
 
 [dev-dependencies]
