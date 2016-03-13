@@ -10,8 +10,9 @@ extern crate void;
 
 #[cfg(test)] extern crate ferrous;
 
-mod future;
-mod pipeline;
+pub mod traits;
+pub mod future;
+pub mod pipeline;
 
 #[cfg(test)]
 mod test_helpers;

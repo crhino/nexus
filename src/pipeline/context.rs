@@ -1,13 +1,5 @@
 use future::{Future, Promise, pair};
-
-pub trait Context {
-    type Write;
-
-    /// The write method can only be called once per stage. The object will be returned if
-    /// the object was not scheduled to be written.
-    fn write(&mut self, obj: Self::Write) -> Result<Future<()>, Self::Write>;
-    fn close(&mut self);
-}
+use traits::*;
 
 pub struct PipelineContext<W> {
     to_write: Option<(W, Promise<()>)>,
@@ -46,6 +38,7 @@ impl<W> Context for PipelineContext<W> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use traits::*;
     use ferrous::dsl::*;
 
     #[test]

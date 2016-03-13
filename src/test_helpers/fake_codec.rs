@@ -1,4 +1,4 @@
-use pipeline::{Codec};
+use traits::*;
 use std::io::{Write};
 use future::{Promise};
 

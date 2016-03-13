@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 use future::{Future};
-use pipeline::{Context, Protocol};
+use traits::*;
 use std::io::{Write};
 
 pub struct FakeProtocol {

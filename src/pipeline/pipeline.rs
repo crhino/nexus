@@ -1,7 +1,7 @@
 use pipeline::context::PipelineContext;
 use future::{Promise};
 use void::Void;
-use pipeline::{Transport, Codec, Protocol};
+use traits::*;
 
 pub struct Pipeline<T, C, P> {
     transport: T,

@@ -1,4 +1,4 @@
-use pipeline::{Transport};
+use traits::*;
 
 pub struct FakeTransport<'a> {
     buf: &'a mut Vec<u8>,
