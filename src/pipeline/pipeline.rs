@@ -29,7 +29,11 @@ where T: Transport,
       P: Protocol<'a, Input=C::Output, Output=C::Input>
 {
     /// Calls spawned method and then writable.
-    pub fn spawned(&mut self) {
+    pub fn spawned(&'a mut self) {
+        let mut ctx = PipelineContext::<P::Output>::new();
+        self.protocol.spawned(&mut ctx);
+        self.transport.spawned();
+        self.writable();
     }
 
     pub fn closed(&mut self) {
@@ -92,27 +96,20 @@ mod tests {
 
     #[test]
     fn test_pipeline_spawned() {
-        // let (_send, recv, stage) = FakeBaseStage::new();
-        let read = vec!(3,3,3);
+        let mut vec = vec!(1, 1, 1);
+        let transport = FakeTransport::new(&mut vec);
+        let codec = FakeCodec::new();
+        let protocol = FakeProtocol::new();
 
-        // let last_stage = Arc::new(Mutex::new(FakeReadWriteStage::new()));
+        let mut pipeline = Pipeline::new(transport, codec, protocol.clone());
+        load_protocol_output(&protocol, vec!(3,3,3));
 
-        // let mut pipeline = Pipeline::<_, End<Vec<u8>, Vec<u8>>>::new(Stub).
-        //     add_stage(last_stage.clone()).
-        //     add_stage(FakePassthroughStage::<Vec<u8>, Vec<u8>>::new()).
-        //     add_stage(stage);
-        // 2. Initiate a connect for pipeline
+        pipeline.spawned();
 
-        // pipeline.spawned();
-        assert!(false);
-
-        // 3. Last read stage should write vector
-        // 5. Assert that write was received
-        // let written = recv.try_recv().unwrap();
-
-        // assert!(&last_stage.lock().unwrap().spawned);
-        // expect(&written).to(equal(&read));
-        // expect(&last_stage.lock().unwrap().get_writable_future()).to(be_ok());
+        let mut p = protocol.lock().unwrap();
+        expect(&(p.spawned)).to(equal(&true));
+        expect(&(p.future)).to(be_some());
+        expect(&(p.future.take().unwrap().get())).to(be_ok());
     }
 
     #[test]

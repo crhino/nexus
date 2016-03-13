@@ -41,6 +41,7 @@ pub trait Protocol<'a> {
     type Output;
     type Input;
 
+    /// Does not currently respect ctx.close()
     fn spawned<C>(&mut self, ctx: &mut C) where C: Context;
     fn closed<C>(&mut self, ctx: &mut C) where C: Context;
     fn received_data<C>(&'a mut self, ctx: &mut C, data: Self::Input) where C: Context<Write=Self::Output>;
