@@ -40,6 +40,7 @@ impl<'t> Transport for FakeTransport<'t> {
     }
 
     fn consume(&mut self, num: usize) {
+        self.buf.clear();
     }
 
     /// Called when socket changes state to being writable. This method should return any data that

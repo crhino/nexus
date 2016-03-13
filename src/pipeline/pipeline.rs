@@ -9,10 +9,10 @@ pub struct Pipeline<T, C, P> {
     protocol: P,
 }
 
-impl<'a, T, C, P> Pipeline<T, C, P>
+impl<T, C, P> Pipeline<T, C, P>
 where T: Transport,
-      C: Codec<'a, T::Buffer>,
-      P: Protocol<'a, Input=C::Output, Output=C::Input>
+      C: Codec<T::Buffer>,
+      P: Protocol<Input=C::Output, Output=C::Input>
 {
     pub fn new(t: T, c: C, p: P) -> Pipeline<T, C, P> {
         Pipeline {
@@ -23,13 +23,13 @@ where T: Transport,
     }
 }
 
-impl<'a, T, C, P> Pipeline<T, C, P>
+impl<T, C, P> Pipeline<T, C, P>
 where T: Transport,
-      C: Codec<'a, T::Buffer>,
-      P: Protocol<'a, Input=C::Output, Output=C::Input>
+      C: Codec<T::Buffer>,
+      P: Protocol<Input=C::Output, Output=C::Input>
 {
     /// Calls spawned method and then writable.
-    pub fn spawned(&'a mut self) {
+    pub fn spawned(&mut self) {
         let mut ctx = PipelineContext::<P::Output>::new();
         self.protocol.spawned(&mut ctx);
         self.transport.spawned();
@@ -42,12 +42,32 @@ where T: Transport,
         self.transport.transport_closed();
     }
 
+    fn read_data(&mut self) -> Option<(C::Input, Promise<()>)> {
+        let (num, output) = {
+            let read = self.transport.read();
+            let decoded = self.codec.decode(read);
+            match decoded {
+                Some(d) => d,
+                None => return None,
+            }
+        };
+        self.transport.consume(num);
+
+        let mut ctx = PipelineContext::new();
+        self.protocol.received_data(&mut ctx, output);
+
+        ctx.into()
+    }
+
     pub fn readable(&mut self) {
+        self.read_data().map(|(to_write, promise)| {
+            self.codec.encode(self.transport.buffer(), to_write, promise);
+        });
     }
 
     /// Signifies that the socket is now writable. This will call transport and
     /// protocol 'writable' method and write any data generated.
-    pub fn writable(&'a mut self) {
+    pub fn writable(&mut self) {
         let protocol = &mut self.protocol;
         let codec = &mut self.codec;
         let transport = &mut self.transport;
@@ -133,25 +153,27 @@ mod tests {
 
     #[test]
     fn test_pipeline_read_write_cycle() {
-        // 1. Multiple stage pipeline
-        // let (send, recv, stage) = FakeBaseStage::new();
-        // let read = vec!(1,2,3,4,5);
-        // send.send(read.clone()).unwrap();
+        let mut vec = vec!(1, 1, 1);
+        let protocol = FakeProtocol::new();
+        {
+            let transport = FakeTransport::new(&mut vec);
+            let codec = FakeCodec::new();
 
-        // let last_stage = Arc::new(Mutex::new(FakeReadWriteStage::new()));
+            let mut pipeline = Pipeline::new(transport, codec, protocol.clone());
+            load_protocol_output(&protocol, vec!(3,3,3));
 
-        // let mut pipeline = pipeline(Stub).
-        //     add_stage(last_stage.clone()).
-        //     add_stage(FakePassthroughStage::<Vec<u8>, Vec<u8>>::new()).
-        //     add_stage(stage);
-        // 2. Initiate a read for pipeline
-        // pipeline.readable();
-        assert!(false);
-        // 3. Last read stage should write back
+            // 2. Initiate a read for pipeline
+            pipeline.readable();
+            // 3. protocol should write back
+        }
+
         // 5. Assert that write was received
-        // let written = recv.try_recv().unwrap();
+        // Expect that initial vector is consumed by transport
+        let expected = vec!(3,3,3);
+        expect(&expected).to(equal(&vec));
 
-        // expect(&written).to(equal(&read));
-        // expect(&last_stage.lock().unwrap().get_future()).to(be_ok());
+        let mut p = protocol.lock().unwrap();
+        expect(&(p.future)).to(be_some());
+        expect(&(p.future.take().unwrap().get())).to(be_ok());
     }
 }

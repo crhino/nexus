@@ -27,7 +27,7 @@ pub trait Transport {
     fn writable(&mut self);
 }
 
-pub trait Codec<'a, B> {
+pub trait Codec<B> {
     type Input;
     type Output;
 
@@ -35,17 +35,17 @@ pub trait Codec<'a, B> {
     fn encode(&mut self, buffer: &mut B, input: Self::Input, promise: Promise<()>);
     // If decode returns None that means the Codec needs more data, otherwise it returns a tuple of
     // the number of bytes used and an Output object.
-    fn decode(&'a mut self, buffer: &'a [u8]) -> Option<(usize, Self::Output)>;
+    fn decode(&mut self, buffer: &[u8]) -> Option<(usize, Self::Output)>;
 }
 
-pub trait Protocol<'a> {
+pub trait Protocol {
     type Output;
     type Input;
 
     /// Does not currently respect ctx.close()
     fn spawned<C>(&mut self, ctx: &mut C) where C: Context;
     fn closed<C>(&mut self, ctx: &mut C) where C: Context;
-    fn received_data<C>(&'a mut self, ctx: &mut C, data: Self::Input) where C: Context<Write=Self::Output>;
+    fn received_data<C>(&mut self, ctx: &mut C, data: Self::Input) where C: Context<Write=Self::Output>;
     /// Called when socket changes state to being writable.
-    fn writable<C>(&'a mut self, ctx: &mut C) where C: Context<Write=Self::Output>;
+    fn writable<C>(&mut self, ctx: &mut C) where C: Context<Write=Self::Output>;
 }

@@ -23,8 +23,8 @@ impl FakeProtocol {
     }
 }
 
-impl<'a> Protocol<'a> for Arc<Mutex<FakeProtocol>> {
-    type Input = &'a [u8];
+impl Protocol for Arc<Mutex<FakeProtocol>> {
+    type Input = Vec<u8>;
     type Output = Vec<u8>;
 
     fn spawned<C>(&mut self, ctx: &mut C) where C: Context {
@@ -35,15 +35,15 @@ impl<'a> Protocol<'a> for Arc<Mutex<FakeProtocol>> {
         self.lock().unwrap().closed = true;
     }
 
-    fn received_data<C>(&'a mut self, ctx: &mut C, data: Self::Input) where C: Context<Write=Self::Output> {
+    fn received_data<C>(&mut self, ctx: &mut C, data: Self::Input) where C: Context<Write=Self::Output> {
         let mut p = self.lock().unwrap();
-        p.input.write_all(data).unwrap();
+        p.input.write_all(&data[..]).unwrap();
         let f = ctx.write(p.output.clone()).unwrap();
         p.future = Some(f);
     }
 
     /// Called when socket changes state to being writable.
-    fn writable<C>(&'a mut self, ctx: &mut C) where C: Context<Write=Self::Output> {
+    fn writable<C>(&mut self, ctx: &mut C) where C: Context<Write=Self::Output> {
         let mut p = self.lock().unwrap();
         let f = ctx.write(p.output.clone()).unwrap();
         p.future = Some(f);
