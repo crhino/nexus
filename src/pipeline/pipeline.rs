@@ -1,167 +1,61 @@
-use pipeline::chain::{Chain, Linker};
-use pipeline::{Stage};
 use pipeline::context::PipelineContext;
 use future::{Promise};
 use void::Void;
+use pipeline::{Transport, Codec, Protocol};
 
-pub struct Pipeline<S, Start> {
-    list: Option<Start>,
-    socket: S,
+pub struct Pipeline<T, C, P> {
+    transport: T,
+    codec: C,
+    protocol: P,
 }
 
-impl<S, Start: Chain<S> + Stage<S>> Pipeline<S, Start> {
-    pub fn new(socket: S) -> Pipeline<S, Start> {
+impl<'a, T, C, P> Pipeline<T, C, P>
+where T: Transport,
+      C: Codec<'a, T::Buffer>,
+      P: Protocol<'a, Input=C::Output, Output=C::Input>
+{
+    pub fn new(t: T, c: C, p: P) -> Pipeline<T, C, P> {
         Pipeline {
-            list: None,
-            socket: socket,
+            transport: t,
+            codec: c,
+            protocol: p,
         }
     }
-
-    pub fn add_stage<St>(self, stage: St) -> Pipeline<S, Linker<St, Start>>
-    where St: Stage<S, ReadOutput=Start::ReadInput, WriteInput=Start::WriteOutput> {
-            match self {
-                Pipeline {
-                    list: stages,
-                    socket: s,
-                } => {
-                    let stages = prepend_stage(stage, stages);
-                    Pipeline {
-                        list: Some(stages),
-                        socket: s,
-                    }
-                }
-            }
-        }
 }
 
-impl<S, Start: Chain<S, ReadInput=()>> Pipeline<S, Start> {
+impl<'a, T, C, P> Pipeline<T, C, P>
+where T: Transport,
+      C: Codec<'a, T::Buffer>,
+      P: Protocol<'a, Input=C::Output, Output=C::Input>
+{
     /// Calls spawned method and then writable.
     pub fn spawned(&mut self) {
-        let list = &mut self.list;
-        let socket = &mut self.socket;
-
-        list.as_mut().and_then(|chain| {
-            do_spawned_iteration(chain, socket);
-            do_writable_iteration(chain, socket)
-        });
     }
 
     pub fn closed(&mut self) {
-        let list = &mut self.list;
-        let socket = &mut self.socket;
-
-        list.as_mut().map(|chain| {
-            do_closed_iteration(chain, socket);
-        });
     }
 
     pub fn readable(&mut self) {
-        let list = &mut self.list;
-        let socket = &mut self.socket;
-
-        list.as_mut().and_then(|chain| {
-            do_read_and_write_iteration(chain, (), socket)
-        });
     }
 
-    /// Signifies that the socket is now writable. This will call stages 'writable' method until a
-    /// stage returns data to write or there are no more stages.
-    pub fn writable(&mut self) {
-        let list = &mut self.list;
-        let socket = &mut self.socket;
+    /// Signifies that the socket is now writable. This will call transport and
+    /// protocol 'writable' method and write any data generated.
+    pub fn writable(&'a mut self) {
+        let protocol = &mut self.protocol;
+        let codec = &mut self.codec;
+        let transport = &mut self.transport;
 
-        list.as_mut().and_then(|chain| {
-            do_writable_iteration(chain, socket)
-        });
-    }
-}
+        let mut ctx = PipelineContext::new();
+        protocol.writable(&mut ctx);
 
-fn do_closed_iteration<S, S2, C>(chain: &mut C, socket: &mut S)
-where C: Chain<S, Next=S2>,
-S2: Chain<S, ReadInput=C::ReadOutput, WriteOutput=C::WriteInput> {
-    chain.next_stage_mut().map(|c| {
-        do_closed_iteration(c, socket);
-    });
-
-    let mut ctx = PipelineContext::<_, Void>::new(socket);
-    chain.closed(&mut ctx);
-}
-
-fn do_spawned_iteration<S, S2, C>(chain: &mut C, socket: &mut S)
-where C: Chain<S, Next=S2>,
-S2: Chain<S, ReadInput=C::ReadOutput, WriteOutput=C::WriteInput> {
-    chain.next_stage_mut().map(|c| {
-        do_spawned_iteration(c, socket);
-    });
-
-    let mut ctx = PipelineContext::<_, Void>::new(socket);
-    chain.spawned(&mut ctx);
-}
-
-fn do_writable_iteration<S, S2, C>(chain: &mut C, socket: &mut S)
--> Option<(C::WriteOutput, Promise<()>)>
-    where C: Chain<S, Next=S2>,
-          S2: Chain<S, ReadInput=C::ReadOutput, WriteOutput=C::WriteInput> {
-              // Recurse first so that we call writable on last stage first and flow back from there
-              let to_write = chain.next_stage_mut().and_then(|c| {
-                  do_writable_iteration(c, socket)
-              });
-
-              // If there is nothing to write, check to see if the current stage has something,
-              // else call write method on current stage without calling writable
-              match to_write {
-                  None => {
-                      let mut ctx = PipelineContext::<_, Void>::new(socket);
-                      chain.writable(&mut ctx)
-                  },
-                  Some((write, promise)) => {
-                      let mut ctx = PipelineContext::<_, Void>::new(socket);
-                      chain.write(&mut ctx, write, promise)
-                  }
-              }
-          }
-
-fn do_read_and_write_iteration<S, R, S2, C>(chain: &mut C, input: R, socket: &mut S)
--> Option<(C::WriteOutput, Promise<()>)>
-    where C: Chain<S, Next=S2, ReadInput=R>,
-          S2: Chain<S, ReadInput=C::ReadOutput, WriteOutput=C::WriteInput> {
-    let (read_out, to_write) = {
-        let mut ctx = PipelineContext::new(socket);
-        let read = chain.read(&mut ctx, input);
-        (read, ctx.into())
-    };
-
-    // Return early if read stage wants to write, this silently discards read_out var
-    // TODO: Is there are better way to handle this case?
-    if to_write.is_some() {
-        return to_write
-    }
-
-    // Recurse until stage doesn't return Some(read_val) or there are no more stages
-    read_out.and_then(|read_val| {
-        chain.next_stage_mut().and_then(|c| {
-            do_read_and_write_iteration(c, read_val, socket)
-        })
-    }).and_then(|(input, promise)| {
-        // Do not let write stage write anything
-        let mut ctx = PipelineContext::<_, Void>::new(socket);
-        chain.write(&mut ctx, input, promise)
-    })
-}
-
-fn prepend_stage<S, St, C>(stage: St, chain: Option<C>) -> Linker<St, C>
-where St: Stage<S>,
-C: Chain<S> + Stage<S, ReadInput=St::ReadOutput, WriteOutput=St::WriteInput>
-{
-    match chain {
-        Some(c) => {
-            let mut linker = Linker::new(stage);
-            linker.add_stage(c);
-            linker
-        },
-        None => {
-            Linker::new(stage)
+        match ctx.into() {
+            Some((to_write, promise)) => {
+                codec.encode(transport.buffer(), to_write, promise);
+            },
+            None => {}
         }
+
+        transport.writable();
     }
 }
 
@@ -169,100 +63,96 @@ C: Chain<S> + Stage<S, ReadInput=St::ReadOutput, WriteOutput=St::WriteInput>
 mod tests {
     use super::*;
     use ferrous::dsl::*;
-    use pipeline::{pipeline, End, Stage, ReadOnlyStage, WriteOnlyStage, WriteStage, ReadStage};
-    use test_helpers::{FakeReadStage, FakeReadWriteStage, FakePassthroughStage, FakeWriteStage, FakeBaseStage};
     use std::io::{self, Write, Read};
     use std::sync::{Arc, Mutex};
+    use test_helpers::{FakeTransport, FakeCodec, FakeProtocol};
 
-    struct Stub;
-
-    #[test]
-    fn test_pipeline_add_read_stage() {
-        let pipeline = Pipeline::<_, End<io::Result<()>, u8>>::new(Stub).
-            add_stage(ReadOnlyStage::<_, u8>::new(FakeReadStage::new()));
-    }
-
-    #[test]
-    fn test_pipeline_add_write_stage() {
-        let pipeline = Pipeline::<_, End<u8, u8>>::new(Stub).
-            add_stage(WriteOnlyStage::<u8, _>::new(FakeWriteStage::new()));
+    fn load_protocol_output(proto: &Arc<Mutex<FakeProtocol>>, out: Vec<u8>) {
+        let mut p = proto.lock().unwrap();
+        p.output.write_all(&out[..]).unwrap();
     }
 
     #[test]
     fn test_pipeline_writable() {
-        let (_send, _recv, stage) = FakeBaseStage::new();
+        let mut vec = vec!(1, 1, 1);
+        let transport = FakeTransport::new(&mut vec);
+        let codec = FakeCodec::new();
+        let protocol = FakeProtocol::new();
 
-        let last_stage = Arc::new(Mutex::new(FakeReadWriteStage::new()));
+        let mut pipeline = Pipeline::new(transport, codec, protocol.clone());
+        load_protocol_output(&protocol, vec!(3,3,3));
 
-        let mut pipeline = Pipeline::<_, End<Vec<u8>, Vec<u8>>>::new(Stub).
-            add_stage(last_stage.clone()).
-            add_stage(FakePassthroughStage::<Vec<u8>, Vec<u8>>::new()).
-            add_stage(stage);
-
-        // FakeReadWriteStage will send a vec to be written
+        // FakeProtocol will send a vec to be written
         pipeline.writable();
 
-        expect(&last_stage.lock().unwrap().get_writable_future()).to(be_ok());
+        let mut p = protocol.lock().unwrap();
+        expect(&(p.future)).to(be_some());
+        expect(&(p.future.take().unwrap().get())).to(be_ok());
     }
 
     #[test]
     fn test_pipeline_spawned() {
-        let (_send, recv, stage) = FakeBaseStage::new();
+        // let (_send, recv, stage) = FakeBaseStage::new();
         let read = vec!(3,3,3);
 
-        let last_stage = Arc::new(Mutex::new(FakeReadWriteStage::new()));
+        // let last_stage = Arc::new(Mutex::new(FakeReadWriteStage::new()));
 
-        let mut pipeline = Pipeline::<_, End<Vec<u8>, Vec<u8>>>::new(Stub).
-            add_stage(last_stage.clone()).
-            add_stage(FakePassthroughStage::<Vec<u8>, Vec<u8>>::new()).
-            add_stage(stage);
+        // let mut pipeline = Pipeline::<_, End<Vec<u8>, Vec<u8>>>::new(Stub).
+        //     add_stage(last_stage.clone()).
+        //     add_stage(FakePassthroughStage::<Vec<u8>, Vec<u8>>::new()).
+        //     add_stage(stage);
         // 2. Initiate a connect for pipeline
-        pipeline.spawned();
+
+        // pipeline.spawned();
+        assert!(false);
+
         // 3. Last read stage should write vector
         // 5. Assert that write was received
-        let written = recv.try_recv().unwrap();
+        // let written = recv.try_recv().unwrap();
 
-        assert!(&last_stage.lock().unwrap().spawned);
-        expect(&written).to(equal(&read));
-        expect(&last_stage.lock().unwrap().get_writable_future()).to(be_ok());
+        // assert!(&last_stage.lock().unwrap().spawned);
+        // expect(&written).to(equal(&read));
+        // expect(&last_stage.lock().unwrap().get_writable_future()).to(be_ok());
     }
 
     #[test]
     fn test_pipeline_closed() {
-        let (_send, _recv, stage) = FakeBaseStage::new();
+        // let (_send, _recv, stage) = FakeBaseStage::new();
 
-        let last_stage = Arc::new(Mutex::new(FakeReadWriteStage::new()));
+        // let last_stage = Arc::new(Mutex::new(FakeReadWriteStage::new()));
 
-        let mut pipeline = pipeline(Stub).
-            add_stage(last_stage.clone()).
-            add_stage(FakePassthroughStage::<Vec<u8>, Vec<u8>>::new()).
-            add_stage(stage);
+        // let mut pipeline = pipeline(Stub).
+        //     add_stage(last_stage.clone()).
+        //     add_stage(FakePassthroughStage::<Vec<u8>, Vec<u8>>::new()).
+        //     add_stage(stage);
 
-        pipeline.closed();
+        // pipeline.closed();
+        assert!(false);
 
-        assert!(&last_stage.lock().unwrap().closed);
+        // assert!(&last_stage.lock().unwrap().closed);
     }
 
     #[test]
     fn test_pipeline_read_write_cycle() {
         // 1. Multiple stage pipeline
-        let (send, recv, stage) = FakeBaseStage::new();
-        let read = vec!(1,2,3,4,5);
-        send.send(read.clone()).unwrap();
+        // let (send, recv, stage) = FakeBaseStage::new();
+        // let read = vec!(1,2,3,4,5);
+        // send.send(read.clone()).unwrap();
 
-        let last_stage = Arc::new(Mutex::new(FakeReadWriteStage::new()));
+        // let last_stage = Arc::new(Mutex::new(FakeReadWriteStage::new()));
 
-        let mut pipeline = pipeline(Stub).
-            add_stage(last_stage.clone()).
-            add_stage(FakePassthroughStage::<Vec<u8>, Vec<u8>>::new()).
-            add_stage(stage);
+        // let mut pipeline = pipeline(Stub).
+        //     add_stage(last_stage.clone()).
+        //     add_stage(FakePassthroughStage::<Vec<u8>, Vec<u8>>::new()).
+        //     add_stage(stage);
         // 2. Initiate a read for pipeline
-        pipeline.readable();
+        // pipeline.readable();
+        assert!(false);
         // 3. Last read stage should write back
         // 5. Assert that write was received
-        let written = recv.try_recv().unwrap();
+        // let written = recv.try_recv().unwrap();
 
-        expect(&written).to(equal(&read));
-        expect(&last_stage.lock().unwrap().get_future()).to(be_ok());
+        // expect(&written).to(equal(&read));
+        // expect(&last_stage.lock().unwrap().get_future()).to(be_ok());
     }
 }

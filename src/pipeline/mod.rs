@@ -1,172 +1,49 @@
 //! # Pipelines
 //!
 //! Pipelines are the main unit of composition in Nexus.
-//!
-//! The ReadStage and WriteStage traits define a set of functions that will be called
-//! when the related event occurs.
 
 pub mod context;
 pub use self::context::{Context};
 
-mod chain;
-pub use self::chain::{End};
-
 mod pipeline;
 pub use self::pipeline::{Pipeline};
 
-use std::io;
-use std::marker::PhantomData;
 use future::{Promise};
 
-pub fn pipeline<S, R, W>(socket: S) -> Pipeline<S, End<R, W>> {
-    Pipeline::new(socket)
+/// Owns the socket
+pub trait Transport {
+    type Buffer;
+
+    /// Returns a buffer object that will write data to the underlying socket. This is used by the
+    /// Codecs in order to efficiently write data without copying.
+    fn buffer(&mut self) -> &mut Self::Buffer;
+    fn spawned(&mut self);
+    fn close(&mut self);
+    fn read(&mut self) -> &[u8];
+    /// Tells transport that "bytes" number of bytes have been read
+    fn consume(&mut self, bytes: usize);
+    /// Called when socket changes state to being writable.
+    fn writable(&mut self);
 }
 
-pub trait Stage<S> {
-    type ReadInput;
-    type ReadOutput;
-    type WriteInput;
-    type WriteOutput;
-
-    fn spawned<C>(&mut self, ctx: &mut C)
-        where C: Context<Socket=S>;
-    fn closed<C>(&mut self, ctx: &mut C)
-        where C: Context<Socket=S>;
-    // If the read method initiates a write command, any output is silently discarded.
-    fn read<C>(&mut self, ctx: &mut C, input: Self::ReadInput) -> Option<Self::ReadOutput>
-            where C: Context<Socket=S, Write=Self::WriteOutput>;
-    fn write<C>(&mut self, ctx: &mut C, input: Self::WriteInput, promise: Promise<()>)
-        -> Option<(Self::WriteOutput, Promise<()>)>
-            where C: Context<Socket=S>;
-    /// Called when socket changes state to being writable. This method should return any data that
-    /// the stage wants to write to the socket, just like the write method.
-    fn writable<C>(&mut self, ctx: &mut C)
-        -> Option<(Self::WriteOutput, Promise<()>)>
-            where C: Context<Socket=S>;
-}
-
-pub trait ReadStage<S> {
+pub trait Codec<'a, B> {
     type Input;
     type Output;
 
-    fn spawned<C>(&mut self, ctx: &mut C)
-        where C: Context<Socket=S>;
-    fn closed<C>(&mut self, ctx: &mut C)
-        where C: Context<Socket=S>;
-    fn read<C>(&mut self, ctx: &mut C, input: Self::Input) -> Option<Self::Output>
-            where C: Context<Socket=S>;
+    /// Codec should write encoded data to buffer and finish the promise.
+    fn encode(&mut self, buffer: &mut B, input: Self::Input, promise: Promise<()>);
+    // If decode returns None that means the Codec needs more data, otherwise it returns a tuple of
+    // the number of bytes used and an Output object.
+    fn decode(&'a mut self, buffer: &'a [u8]) -> Option<(usize, Self::Output)>;
 }
 
-pub struct ReadOnlyStage<R, W> {
-    read_stage: R,
-    write: PhantomData<* const W>,
-}
-
-impl<R, W> ReadOnlyStage<R, W> {
-    pub fn new(read_stage: R) -> ReadOnlyStage<R, W> {
-        ReadOnlyStage {
-            read_stage: read_stage,
-            write: PhantomData,
-        }
-    }
-}
-
-impl<R: ReadStage<S>, S, W> Stage<S> for ReadOnlyStage<R, W> {
-    type ReadInput = R::Input;
-    type ReadOutput = R::Output;
-    type WriteInput = W;
-    type WriteOutput = W;
-
-    fn spawned<C>(&mut self, ctx: &mut C)
-        where C: Context<Socket=S> {
-        self.read_stage.spawned(ctx)
-    }
-
-    fn closed<C>(&mut self, ctx: &mut C)
-        where C: Context<Socket=S> {
-        self.read_stage.closed(ctx)
-    }
-
-    fn read<C>(&mut self, ctx: &mut C, input: Self::ReadInput)
-        -> Option<Self::ReadOutput>
-            where C: Context<Socket=S, Write=Self::WriteOutput> {
-        self.read_stage.read(ctx, input)
-    }
-
-    fn write<C>(&mut self, ctx: &mut C, input: Self::WriteInput, promise: Promise<()>)
-        -> Option<(Self::WriteOutput, Promise<()>)>
-            where C: Context<Socket=S> {
-        Some((input, promise))
-    }
-
-    fn writable<C>(&mut self, ctx: &mut C)
-        -> Option<(Self::WriteOutput, Promise<()>)>
-            where C: Context<Socket=S> {
-                None
-            }
-}
-
-pub trait WriteStage<S> {
-    type Input;
+pub trait Protocol<'a> {
     type Output;
+    type Input;
 
-    fn spawned<C>(&mut self, ctx: &mut C)
-        where C: Context<Socket=S>;
-    fn closed<C>(&mut self, ctx: &mut C)
-        where C: Context<Socket=S>;
-    fn write<C>(&mut self, ctx: &mut C, input: Self::Input, promise: Promise<()>)
-        -> Option<(Self::Output, Promise<()>)>
-            where C: Context<Socket=S>;
-    fn writable<C>(&mut self, ctx: &mut C)
-        -> Option<(Self::Output, Promise<()>)>
-            where C: Context<Socket=S>;
-}
-
-pub struct WriteOnlyStage<R, W> {
-    write_stage: W,
-    read: PhantomData<* const R>,
-}
-
-impl<R, W> WriteOnlyStage<R, W> {
-    pub fn new(write_stage: W) -> WriteOnlyStage<R, W> {
-        WriteOnlyStage {
-            write_stage: write_stage,
-            read: PhantomData,
-        }
-    }
-}
-
-impl<S, R, W: WriteStage<S>> Stage<S> for WriteOnlyStage<R, W> {
-    type ReadInput = R;
-    type ReadOutput = R;
-    type WriteInput = W::Input;
-    type WriteOutput = W::Output;
-
-    fn spawned<C>(&mut self, ctx: &mut C)
-        where C: Context<Socket=S> {
-        self.write_stage.spawned(ctx)
-    }
-
-    fn closed<C>(&mut self, ctx: &mut C)
-        where C: Context<Socket=S> {
-        self.write_stage.closed(ctx)
-    }
-
-    fn read<C>(&mut self, ctx: &mut C, input: Self::ReadInput)
-        -> Option<Self::ReadOutput>
-            where C: Context<Socket=S, Write=Self::WriteOutput> {
-        Some(input)
-    }
-
-    fn write<C>(&mut self, ctx: &mut C, input: Self::WriteInput, promise: Promise<()>)
-        -> Option<(Self::WriteOutput, Promise<()>)>
-            where C: Context<Socket=S> {
-        self.write_stage.write(ctx, input, promise)
-    }
-
-    fn writable<C>(&mut self, ctx: &mut C)
-        -> Option<(Self::WriteOutput, Promise<()>)>
-            where C: Context<Socket=S> {
-                self.write_stage.writable(ctx)
-            }
+    fn spawned<C>(&mut self, ctx: &mut C) where C: Context;
+    fn closed<C>(&mut self, ctx: &mut C) where C: Context;
+    fn received_data<C>(&'a mut self, ctx: &mut C, data: Self::Input) where C: Context<Write=Self::Output>;
+    /// Called when socket changes state to being writable.
+    fn writable<C>(&'a mut self, ctx: &mut C) where C: Context<Write=Self::Output>;
 }

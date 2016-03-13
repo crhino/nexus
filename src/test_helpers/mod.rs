@@ -1,14 +1,8 @@
-mod fake_write_stage;
-pub use test_helpers::fake_write_stage::{FakeWriteStage};
+mod fake_transport;
+pub use test_helpers::fake_transport::{FakeTransport};
 
-mod fake_read_stage;
-pub use test_helpers::fake_read_stage::{FakeReadStage};
+mod fake_codec;
+pub use test_helpers::fake_codec::{FakeCodec};
 
-mod fake_read_write_stage;
-pub use test_helpers::fake_read_write_stage::{FakeReadWriteStage};
-
-mod fake_base_stage;
-pub use test_helpers::fake_base_stage::{FakeBaseStage};
-
-mod fake_passthrough_stage;
-pub use test_helpers::fake_passthrough_stage::{FakePassthroughStage};
+mod fake_protocol;
+pub use test_helpers::fake_protocol::{FakeProtocol};

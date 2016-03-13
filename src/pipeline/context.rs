@@ -1,25 +1,21 @@
 use future::{Future, Promise, pair};
 
 pub trait Context {
-    type Socket;
     type Write;
 
-    fn socket(&mut self) -> &mut Self::Socket;
     /// The write method can only be called once per stage. The object will be returned if
     /// the object was not scheduled to be written.
     fn write(&mut self, obj: Self::Write) -> Result<Future<()>, Self::Write>;
     fn close(&mut self);
 }
 
-pub struct PipelineContext<'a, S: 'a, W> {
-    socket: &'a mut S,
+pub struct PipelineContext<W> {
     to_write: Option<(W, Promise<()>)>,
 }
 
-impl<'a, S: 'a, W> PipelineContext<'a, S, W> {
-    pub fn new(socket: &'a mut S) -> PipelineContext<'a, S, W> {
+impl<W> PipelineContext<W> {
+    pub fn new() -> PipelineContext<W> {
         PipelineContext {
-            socket: socket,
             to_write: None,
         }
     }
@@ -29,13 +25,8 @@ impl<'a, S: 'a, W> PipelineContext<'a, S, W> {
     }
 }
 
-impl<'a, S: 'a, W> Context for PipelineContext<'a, S, W> {
-    type Socket = S;
+impl<W> Context for PipelineContext<W> {
     type Write = W;
-
-    fn socket(&mut self) -> &mut Self::Socket {
-        self.socket
-    }
 
     fn write(&mut self, obj: Self::Write) -> Result<Future<()>, Self::Write> {
         if self.to_write.is_some() {
@@ -55,22 +46,21 @@ impl<'a, S: 'a, W> Context for PipelineContext<'a, S, W> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rotor::mio::unix::{pipe};
-    use std::io::{Write, Read};
-    use test_helpers::FakeWriteStage;
+    use ferrous::dsl::*;
 
     #[test]
-    fn test_socket() {
-        let (mut r, mut w) = pipe().unwrap();
+    fn test_write() {
+        let mut ctx = PipelineContext::new();
+        let write = 9u8;
+        let res = ctx.write(write);
+        expect(&res).to(be_ok());
 
-        let buf = [1, 2, 3];
-        w.write(&buf).unwrap();
-        w.flush().unwrap();
+        let res = ctx.write(write);
+        expect(&res).to(be_err());
+        let err = res.unwrap_err();
+        expect(&err).to(equal(&9u8));
 
-        let mut context = PipelineContext::<_, &[u8]>::new(&mut r);
-        let mut socket = context.socket();
-        let mut rbuf = [0, 0, 0];
-        socket.read(&mut rbuf).unwrap();
-        assert_eq!(rbuf, buf);
+        let to_write = ctx.into();
+        expect(&to_write).to(be_some());
     }
 }
