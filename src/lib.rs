@@ -14,6 +14,7 @@ extern crate void;
 pub mod traits;
 pub mod future;
 pub mod pipeline;
+pub mod transport;
 
 #[cfg(test)]
 mod test_helpers;
