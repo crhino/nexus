@@ -70,8 +70,9 @@ where T: Transport,
                 });
             },
             Err(ref e) => {
-                // self.transport.closed(Some(e));
-                // self.protocol.closed(Some(e));
+                let mut ctx = PipelineContext::<P::Output>::new();
+                self.protocol.closed(&mut ctx, Some(e));
+                self.transport.closed(Some(e));
             }
         }
     }
@@ -114,7 +115,7 @@ mod tests {
     fn test_pipeline_writable() {
         let mut vec = vec!(1, 1, 1);
         let assertions = TransportAssertions::new();
-        let transport = FakeTransport::new(&mut vec, assertions.clone());
+        let transport = FakeTransport::new(&mut vec, assertions.clone(), None);
         let codec = FakeCodec::new();
         let protocol = FakeProtocol::new();
 
@@ -136,7 +137,7 @@ mod tests {
     fn test_pipeline_spawned() {
         let mut vec = vec!(1, 1, 1);
         let assertions = TransportAssertions::new();
-        let transport = FakeTransport::new(&mut vec, assertions.clone());
+        let transport = FakeTransport::new(&mut vec, assertions.clone(), None);
         let codec = FakeCodec::new();
         let protocol = FakeProtocol::new();
 
@@ -158,7 +159,7 @@ mod tests {
     fn test_pipeline_closed() {
         let mut vec = vec!(1, 1, 1);
         let assertions = TransportAssertions::new();
-        let transport = FakeTransport::new(&mut vec, assertions.clone());
+        let transport = FakeTransport::new(&mut vec, assertions.clone(), None);
         let codec = FakeCodec::new();
         let protocol = FakeProtocol::new();
 
@@ -180,7 +181,7 @@ mod tests {
         let protocol = FakeProtocol::new();
         let assertions = TransportAssertions::new();
         {
-            let transport = FakeTransport::new(&mut vec, assertions.clone());
+        let transport = FakeTransport::new(&mut vec, assertions.clone(), None);
             let codec = FakeCodec::new();
 
             let mut pipeline = Pipeline::new(transport, codec, protocol.clone());
@@ -203,6 +204,26 @@ mod tests {
 
     #[test]
     fn test_pipeline_read_io_error() {
-        assert!(false);
+        let mut vec = vec!(1, 1, 1);
+        let assertions = TransportAssertions::new();
+        let protocol = FakeProtocol::new();
+        {
+            let transport = FakeTransport::new(&mut vec, assertions.clone(), Some(io::ErrorKind::Other));
+            let codec = FakeCodec::new();
+
+            let mut pipeline = Pipeline::new(transport, codec, protocol.clone());
+
+            pipeline.readable();
+        }
+
+        let expected = vec!(1,1,1);
+        expect(&expected).to(equal(&vec));
+
+        let mut p = protocol.lock().unwrap();
+        expect(&(p.closed)).to(equal(&true));
+
+        let mut t = assertions.lock().unwrap();
+        expect(&(t.closed)).to(equal(&true));
+        expect(&(t.error_kind.take().unwrap())).to(equal(&io::ErrorKind::Other));
     }
 }

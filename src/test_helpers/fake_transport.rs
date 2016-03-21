@@ -5,11 +5,13 @@ use std::io::{self};
 pub struct FakeTransport<'a> {
     buf: &'a mut Vec<u8>,
     assertions: Arc<Mutex<TransportAssertions>>,
+    read_error: Option<io::ErrorKind>,
 }
 
 pub struct TransportAssertions {
     pub spawned: bool,
     pub closed: bool,
+    pub error_kind: Option<io::ErrorKind>,
     pub writable: bool,
 }
 
@@ -18,15 +20,17 @@ impl TransportAssertions {
         Arc::new(Mutex::new(TransportAssertions {
             spawned: false,
             closed: false,
+            error_kind: None,
             writable: false,
         }))
     }
 }
 
 impl<'a> FakeTransport<'a> {
-    pub fn new(buf: &'a mut Vec<u8>, assertions: Arc<Mutex<TransportAssertions>>) -> FakeTransport<'a> {
+    pub fn new(buf: &'a mut Vec<u8>, assertions: Arc<Mutex<TransportAssertions>>, read_error: Option<io::ErrorKind>) -> FakeTransport<'a> {
         FakeTransport {
             buf: buf,
+            read_error: read_error,
             assertions: assertions,
         }
     }
@@ -46,11 +50,17 @@ impl<'t> Transport for FakeTransport<'t> {
 
     fn closed(&mut self, err: Option<&io::Error>) {
         let mut a = self.assertions.lock().unwrap();
-        a.closed = true
+        a.closed = true;
+        err.map(|e| {
+            a.error_kind = Some(e.kind());
+        });
     }
 
     fn read(&mut self) -> io::Result<&[u8]> {
-        Ok(&self.buf[..])
+        match self.read_error {
+            None => { Ok(&self.buf[..]) },
+            Some(e) => { Err(io::Error::new(e, "test error")) },
+        }
     }
 
     fn consume(&mut self, num: usize) {
