@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 use future::{Future};
 use traits::*;
-use std::io::{Write};
+use std::io::{self, Write};
 
 pub struct FakeProtocol {
     pub input: Vec<u8>,
@@ -31,7 +31,7 @@ impl Protocol for Arc<Mutex<FakeProtocol>> {
         self.lock().unwrap().spawned = true;
     }
 
-    fn closed<C>(&mut self, ctx: &mut C) where C: Context {
+    fn closed<C>(&mut self, ctx: &mut C, err: Option<&io::Error>) where C: Context {
         self.lock().unwrap().closed = true;
     }
 

@@ -1,5 +1,5 @@
 use traits::*;
-use std::io::{Write};
+use std::io::{self, Write};
 use future::{Promise};
 
 pub struct FakeCodec {
@@ -21,9 +21,10 @@ impl Codec<Vec<u8>> for FakeCodec {
     type Output = Vec<u8>;
 
     /// Codec should write encoded data to buffer and finish the promise.
-    fn encode(&mut self, buffer: &mut Vec<u8>, input: Self::Input, promise: Promise<()>) {
+    fn encode(&mut self, buffer: &mut Vec<u8>, input: Self::Input, promise: Promise<()>) -> io::Result<()> {
         self.encoded.write_all(&input[..]).unwrap();
         promise.set(buffer.write_all(&input[..]));
+        Ok(())
     }
 
     // If decode returns None that means the Codec needs more data, otherwise it returns a tuple of

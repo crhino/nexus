@@ -1,6 +1,7 @@
 use pipeline::context::PipelineContext;
 use future::{Promise};
 use void::Void;
+use std::io::{self};
 use traits::*;
 
 pub struct Pipeline<T, C, P> {
@@ -38,17 +39,17 @@ where T: Transport,
 
     pub fn closed(&mut self) {
         let mut ctx = PipelineContext::<P::Output>::new();
-        self.protocol.closed(&mut ctx);
-        self.transport.transport_closed();
+        self.protocol.closed(&mut ctx, None);
+        self.transport.closed(None);
     }
 
-    fn read_data(&mut self) -> Option<(C::Input, Promise<()>)> {
+    fn read_data(&mut self) -> io::Result<Option<(C::Input, Promise<()>)>> {
         let (num, output) = {
-            let read = self.transport.read();
+            let read = try!(self.transport.read());
             let decoded = self.codec.decode(read);
             match decoded {
                 Some(d) => d,
-                None => return None,
+                None => return Ok(None),
             }
         };
         self.transport.consume(num);
@@ -56,13 +57,23 @@ where T: Transport,
         let mut ctx = PipelineContext::new();
         self.protocol.received_data(&mut ctx, output);
 
-        ctx.into()
+        Ok(ctx.into())
     }
 
     pub fn readable(&mut self) {
-        self.read_data().map(|(to_write, promise)| {
-            self.codec.encode(self.transport.buffer(), to_write, promise);
-        });
+        match self.read_data() {
+            Ok(opt) => {
+                opt.map(|(to_write, promise)| {
+                    self.codec.encode(self.transport.buffer(),
+                                      to_write,
+                                      promise);
+                });
+            },
+            Err(ref e) => {
+                // self.transport.closed(Some(e));
+                // self.protocol.closed(Some(e));
+            }
+        }
     }
 
     /// Signifies that the socket is now writable. This will call transport and
@@ -92,7 +103,7 @@ mod tests {
     use ferrous::dsl::*;
     use std::io::{self, Write, Read};
     use std::sync::{Arc, Mutex};
-    use test_helpers::{FakeTransport, FakeCodec, FakeProtocol};
+    use test_helpers::{FakeTransport, TransportAssertions, FakeCodec, FakeProtocol};
 
     fn load_protocol_output(proto: &Arc<Mutex<FakeProtocol>>, out: Vec<u8>) {
         let mut p = proto.lock().unwrap();
@@ -102,7 +113,8 @@ mod tests {
     #[test]
     fn test_pipeline_writable() {
         let mut vec = vec!(1, 1, 1);
-        let transport = FakeTransport::new(&mut vec);
+        let assertions = TransportAssertions::new();
+        let transport = FakeTransport::new(&mut vec, assertions.clone());
         let codec = FakeCodec::new();
         let protocol = FakeProtocol::new();
 
@@ -115,12 +127,16 @@ mod tests {
         let mut p = protocol.lock().unwrap();
         expect(&(p.future)).to(be_some());
         expect(&(p.future.take().unwrap().get())).to(be_ok());
+
+        let mut t = assertions.lock().unwrap();
+        expect(&(t.writable)).to(equal(&true));
     }
 
     #[test]
     fn test_pipeline_spawned() {
         let mut vec = vec!(1, 1, 1);
-        let transport = FakeTransport::new(&mut vec);
+        let assertions = TransportAssertions::new();
+        let transport = FakeTransport::new(&mut vec, assertions.clone());
         let codec = FakeCodec::new();
         let protocol = FakeProtocol::new();
 
@@ -133,12 +149,16 @@ mod tests {
         expect(&(p.spawned)).to(equal(&true));
         expect(&(p.future)).to(be_some());
         expect(&(p.future.take().unwrap().get())).to(be_ok());
+
+        let mut t = assertions.lock().unwrap();
+        expect(&(t.spawned)).to(equal(&true));
     }
 
     #[test]
     fn test_pipeline_closed() {
         let mut vec = vec!(1, 1, 1);
-        let transport = FakeTransport::new(&mut vec);
+        let assertions = TransportAssertions::new();
+        let transport = FakeTransport::new(&mut vec, assertions.clone());
         let codec = FakeCodec::new();
         let protocol = FakeProtocol::new();
 
@@ -149,14 +169,18 @@ mod tests {
 
         let mut p = protocol.lock().unwrap();
         expect(&(p.closed)).to(equal(&true));
+
+        let mut t = assertions.lock().unwrap();
+        expect(&(t.closed)).to(equal(&true));
     }
 
     #[test]
     fn test_pipeline_read_write_cycle() {
         let mut vec = vec!(1, 1, 1);
         let protocol = FakeProtocol::new();
+        let assertions = TransportAssertions::new();
         {
-            let transport = FakeTransport::new(&mut vec);
+            let transport = FakeTransport::new(&mut vec, assertions.clone());
             let codec = FakeCodec::new();
 
             let mut pipeline = Pipeline::new(transport, codec, protocol.clone());
@@ -175,5 +199,10 @@ mod tests {
         let mut p = protocol.lock().unwrap();
         expect(&(p.future)).to(be_some());
         expect(&(p.future.take().unwrap().get())).to(be_ok());
+    }
+
+    #[test]
+    fn test_pipeline_read_io_error() {
+        assert!(false);
     }
 }

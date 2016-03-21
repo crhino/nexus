@@ -1,5 +1,5 @@
 mod fake_transport;
-pub use test_helpers::fake_transport::{FakeTransport};
+pub use test_helpers::fake_transport::{FakeTransport, TransportAssertions};
 
 mod fake_codec;
 pub use test_helpers::fake_codec::{FakeCodec};

@@ -1,17 +1,33 @@
 use traits::*;
+use std::sync::{Arc, Mutex};
+use std::io::{self};
 
 pub struct FakeTransport<'a> {
     buf: &'a mut Vec<u8>,
+    assertions: Arc<Mutex<TransportAssertions>>,
+}
+
+pub struct TransportAssertions {
     pub spawned: bool,
     pub closed: bool,
+    pub writable: bool,
+}
+
+impl TransportAssertions {
+    pub fn new() -> Arc<Mutex<TransportAssertions>> {
+        Arc::new(Mutex::new(TransportAssertions {
+            spawned: false,
+            closed: false,
+            writable: false,
+        }))
+    }
 }
 
 impl<'a> FakeTransport<'a> {
-    pub fn new(buf: &'a mut Vec<u8>) -> FakeTransport<'a> {
+    pub fn new(buf: &'a mut Vec<u8>, assertions: Arc<Mutex<TransportAssertions>>) -> FakeTransport<'a> {
         FakeTransport {
             buf: buf,
-            spawned: false,
-            closed: false,
+            assertions: assertions,
         }
     }
 }
@@ -24,19 +40,17 @@ impl<'t> Transport for FakeTransport<'t> {
     }
 
     fn spawned(&mut self) {
-        self.spawned = true
+        let mut a = self.assertions.lock().unwrap();
+        a.spawned = true
     }
 
-    fn close(&mut self) {
-        self.closed = true
+    fn closed(&mut self, err: Option<&io::Error>) {
+        let mut a = self.assertions.lock().unwrap();
+        a.closed = true
     }
 
-    fn transport_closed(&mut self) {
-        self.closed = true
-    }
-
-    fn read(&mut self) -> &[u8] {
-        &self.buf[..]
+    fn read(&mut self) -> io::Result<&[u8]> {
+        Ok(&self.buf[..])
     }
 
     fn consume(&mut self, num: usize) {
@@ -46,5 +60,7 @@ impl<'t> Transport for FakeTransport<'t> {
     /// Called when socket changes state to being writable. This method should return any data that
     /// the stage wants to write to the socket.
     fn writable(&mut self) {
+        let mut a = self.assertions.lock().unwrap();
+        a.writable = true
     }
 }
