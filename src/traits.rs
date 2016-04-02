@@ -23,7 +23,7 @@ pub trait Codec<B> {
     type Output;
 
     /// Codec should write encoded data to buffer and finish the promise.
-    fn encode(&mut self, buffer: &mut B, input: Self::Input, promise: Promise<()>) -> io::Result<()> ;
+    fn encode(&mut self, buffer: &mut B, input: Self::Input) -> io::Result<()> ;
     // If decode returns None that means the Codec needs more data, otherwise it returns a tuple of
     // the number of bytes used and an Output object.
     fn decode(&mut self, buffer: &[u8]) -> Option<(usize, Self::Output)>;

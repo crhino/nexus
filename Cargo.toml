@@ -18,5 +18,12 @@ rotor = "^0.6"
 netbuf = "^0.3"
 void = "0.0.5"
 
+serde = { version = "^0.7", optional = true }
+serde_json = { version = "^0.7", optional = true }
+serde_macros = { version = "^0.7", optional = true }
+
+[features]
+json_codec = ["serde", "serde_json", "serde_macros"]
+
 [dev-dependencies]
 ferrous = "0.1.0"

@@ -64,9 +64,8 @@ where T: Transport,
         match self.read_data() {
             Ok(opt) => {
                 opt.map(|(to_write, promise)| {
-                    self.codec.encode(self.transport.buffer(),
-                                      to_write,
-                                      promise);
+                    promise.set(self.codec.encode(self.transport.buffer(),
+                                                  to_write));
                 });
             },
             Err(ref e) => {
@@ -89,7 +88,7 @@ where T: Transport,
 
         match ctx.into() {
             Some((to_write, promise)) => {
-                codec.encode(transport.buffer(), to_write, promise);
+                promise.set(codec.encode(transport.buffer(), to_write));
             },
             None => {}
         }
