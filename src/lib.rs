@@ -10,6 +10,7 @@
 extern crate rotor;
 extern crate netbuf;
 extern crate void;
+extern crate byteorder;
 #[macro_use] extern crate log;
 
 #[cfg(feature = "json_codec")] extern crate serde;

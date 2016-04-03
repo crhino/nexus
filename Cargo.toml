@@ -17,6 +17,7 @@ log = "^0.3.4"
 rotor = "^0.6"
 netbuf = "^0.3"
 void = "0.0.5"
+byteorder = "^0.5"
 
 serde = { version = "^0.7", optional = true }
 serde_json = { version = "^0.7", optional = true }
